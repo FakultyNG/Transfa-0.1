@@ -30,7 +30,7 @@ class ApiException implements Exception {
     }
 
     return ApiException(
-      message: message ?? _fallbackMessage(error.type),
+      message: message ?? _fallbackMessage(error.type, response?.statusCode),
       statusCode: response?.statusCode,
       code: code,
       details: details,
@@ -42,16 +42,28 @@ class ApiException implements Exception {
   final String? code;
   final Object? details;
 
-  static String _fallbackMessage(DioExceptionType type) => switch (type) {
-    DioExceptionType.connectionTimeout ||
-    DioExceptionType.sendTimeout ||
-    DioExceptionType.receiveTimeout =>
-      'The request timed out. Please try again.',
-    DioExceptionType.connectionError =>
-      'Unable to reach Transfa. Check your connection and try again.',
-    DioExceptionType.cancel => 'The request was cancelled.',
-    _ => 'Something went wrong. Please try again.',
-  };
+  static String _fallbackMessage(DioExceptionType type, int? statusCode) {
+    if (statusCode == 429) {
+      return 'Too many requests. Please wait a moment and try again.';
+    }
+    if (statusCode == 502 || statusCode == 503 || statusCode == 504) {
+      return 'The service is temporarily unavailable. Please try again.';
+    }
+    if (statusCode != null && statusCode >= 500) {
+      return 'The server could not complete the request. Please try again.';
+    }
+
+    return switch (type) {
+      DioExceptionType.connectionTimeout ||
+      DioExceptionType.sendTimeout ||
+      DioExceptionType.receiveTimeout =>
+        'The request timed out. Please try again.',
+      DioExceptionType.connectionError =>
+        'Unable to reach Transfa. Check your connection and try again.',
+      DioExceptionType.cancel => 'The request was cancelled.',
+      _ => 'Something went wrong. Please try again.',
+    };
+  }
 
   @override
   String toString() => message;

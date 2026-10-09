@@ -205,4 +205,23 @@ void main() {
     expect(exception.message, 'KYC verification is required.');
     expect(exception.code, 'KYC_REQUIRED');
   });
+
+  test('gateway failures use an actionable service message', () {
+    final options = RequestOptions(path: '/api/v1/auth/otp/send');
+    final exception = ApiException.fromDioException(
+      DioException(
+        requestOptions: options,
+        response: Response<Object?>(
+          requestOptions: options,
+          statusCode: 503,
+          data: '<html>Service unavailable</html>',
+        ),
+      ),
+    );
+
+    expect(
+      exception.message,
+      'The service is temporarily unavailable. Please try again.',
+    );
+  });
 }
