@@ -19,6 +19,8 @@ class AppInput extends StatelessWidget {
   final int? maxLength;
   final TextCapitalization capitalization;
   final bool enabled;
+  final bool readOnly;
+  final VoidCallback? onTap;
 
   const AppInput({
     super.key,
@@ -35,6 +37,8 @@ class AppInput extends StatelessWidget {
     this.maxLength,
     this.capitalization = TextCapitalization.none,
     this.enabled = true,
+    this.readOnly = false,
+    this.onTap,
   });
 
   @override
@@ -43,7 +47,12 @@ class AppInput extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (label != null) ...[
-          Text(label!, style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
+          Text(
+            label!,
+            style: AppTypography.caption.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
           const SizedBox(height: 8),
         ],
         SizedBox(
@@ -57,18 +66,25 @@ class AppInput extends StatelessWidget {
             onChanged: onChanged,
             maxLength: maxLength,
             enabled: enabled,
+            readOnly: readOnly,
+            onTap: onTap,
             textCapitalization: capitalization,
             style: AppTypography.body,
             cursorColor: AppColors.primary,
             decoration: InputDecoration(
               counterText: '',
               hintText: hint,
-              hintStyle: AppTypography.body.copyWith(color: AppColors.textMuted),
+              hintStyle: AppTypography.body.copyWith(
+                color: AppColors.textMuted,
+              ),
               prefixIcon: leading,
               suffixIcon: trailing,
               filled: true,
               fillColor: AppColors.surfaceMuted,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 20,
+                vertical: 18,
+              ),
               border: _border(AppColors.divider),
               enabledBorder: _border(AppColors.divider),
               focusedBorder: _border(AppColors.primary, width: 1.4),
@@ -82,7 +98,8 @@ class AppInput extends StatelessWidget {
     );
   }
 
-  OutlineInputBorder _border(Color color, {double width = 1}) => OutlineInputBorder(
+  OutlineInputBorder _border(Color color, {double width = 1}) =>
+      OutlineInputBorder(
         borderRadius: BorderRadius.circular(35),
         borderSide: BorderSide(color: color, width: width),
       );

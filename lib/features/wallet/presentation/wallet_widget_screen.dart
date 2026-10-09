@@ -48,7 +48,7 @@ class WalletWidgetScreen extends StatelessWidget {
 
             // 1. Frosted Wallet widget card.
             GestureDetector(
-              // onTap: () => context.push(Routes.wallet),
+              onTap: () => context.push(Routes.walletOverview),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(32),
                 child: BackdropFilter(
@@ -130,11 +130,7 @@ class WalletWidgetScreen extends StatelessWidget {
                 _AppIcon(
                   asset: Assets.reeplayIcon,
                   label: 'Reeplay',
-                  onTap: () => _showComingSoonPopup(
-                    context,
-                    'Easter Egg',
-                    'You got 7 Days of Reeplay. Share content when available on Transfa.',
-                  ),
+                  onTap: () => context.push(Routes.giftCards),
                 ),
               ],
             ),

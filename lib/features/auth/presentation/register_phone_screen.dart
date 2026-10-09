@@ -2,6 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:transfa/shared/widgets/animated_dotted_loader.dart';
@@ -9,6 +10,9 @@ import '../../../core/constants/assets.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/utils/error_messages.dart';
+import '../../../data/models/auth.dart';
+import '../../../data/repositories/repositories.dart';
 import '../../../features/auth/presentation/unlock_screens.dart';
 import '../../pop-ups/checkYourNumber_popup.dart';
 
@@ -18,17 +22,17 @@ import '../../pop-ups/checkYourNumber_popup.dart';
 /// New Transfa / Unlock with Face squares; this one shows the red
 /// "Continue" pill and a privacy footer with the "See how your info is
 /// managed..." link.
-class RegisterPhoneScreen extends StatefulWidget {
+class RegisterPhoneScreen extends ConsumerStatefulWidget {
   const RegisterPhoneScreen({super.key});
 
   @override
-  State<RegisterPhoneScreen> createState() => _RegisterPhoneScreenState();
+  ConsumerState<RegisterPhoneScreen> createState() =>
+      _RegisterPhoneScreenState();
 }
 
-class _RegisterPhoneScreenState extends State<RegisterPhoneScreen> {
-  final _phone = TextEditingController(text: '0703 208 4888');
-  static const String _validPhoneNumber =
-      '07032084888'; // The expected phone number without spaces
+class _RegisterPhoneScreenState extends ConsumerState<RegisterPhoneScreen> {
+  final _phone = TextEditingController();
+  bool _loading = false;
 
   @override
   void dispose() {
@@ -36,30 +40,34 @@ class _RegisterPhoneScreenState extends State<RegisterPhoneScreen> {
     super.dispose();
   }
 
-  String _formatPhoneNumber(String value) {
-    final digits = value.replaceAll(RegExp(r'\s'), '');
-    if (digits.isEmpty) return '';
-
-    final buffer = StringBuffer();
-    for (int i = 0; i < digits.length && i < 11; i++) {
-      if (i == 4 || i == 8) {
-        buffer.write(' ');
-      }
-      buffer.write(digits[i]);
-    }
-    return buffer.toString();
-  }
-
-  void _handleContinue() {
+  Future<void> _handleContinue() async {
     final enteredNumber = _phone.text.replaceAll(RegExp(r'\s'), '');
 
-    // Check if the entered number matches the expected number
-    if (enteredNumber != _validPhoneNumber) {
-      // Show the popup if numbers don't match
+    if (!RegExp(r'^0\d{10}$').hasMatch(enteredNumber)) {
       _showCheckYourNumberPopup();
-    } else {
-      // Proceed to verification if numbers match
-      context.push(Routes.verifyStartkey);
+      return;
+    }
+
+    setState(() => _loading = true);
+    try {
+      final repository = ref.read(authRepositoryProvider);
+      final start = await repository.startRegistration(enteredNumber);
+      final challenge = await repository.sendOtp(enteredNumber);
+      ref
+          .read(registrationSessionProvider.notifier)
+          .state = RegistrationSession(
+        phoneNumber: challenge.phoneNumber,
+        registrationToken: start.registrationToken,
+        otpReference: challenge.otpReference,
+      );
+      if (mounted) context.push(Routes.verifyStartkey);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -136,7 +144,10 @@ class _RegisterPhoneScreenState extends State<RegisterPhoneScreen> {
                     const SizedBox(height: 16),
                     _PhoneField(controller: _phone),
                     const SizedBox(height: 18),
-                    _RedLockPill(label: 'Continue', onTap: _handleContinue),
+                    _RedLockPill(
+                      label: _loading ? 'Please wait' : 'Continue',
+                      onTap: _loading ? () {} : _handleContinue,
+                    ),
                   ],
                 ),
               ),

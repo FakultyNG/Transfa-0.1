@@ -8,11 +8,10 @@ import 'package:transfa/core/constants/assets.dart';
 import 'package:transfa/shared/widgets/animated_dotted_loader.dart';
 
 import '../../../core/router/routes.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/utils/error_messages.dart';
 import '../../../data/repositories/repositories.dart';
 import '../../../shared/widgets/glass_card.dart';
-import '../../../shared/widgets/transfa_logo.dart';
 import '../../pop-ups/enterCorrectCode_popup.dart';
 
 /// "Verify Your Startkey" — three glass cards: brand header, code entry
@@ -114,33 +113,44 @@ class _VerifyStartkeyScreenState extends ConsumerState<VerifyStartkeyScreen> {
     // Don't proceed if already verifying or code is not complete
     if (_isVerifying || _code.length != 6) return;
 
-    // Check if code is not equal to "000000"
-    if (_code != '000000') {
-      // Show the popup
-      _showEnterCorrectCodePopup();
-      return;
-    }
-
     // Start loading indicator
     setState(() {
       _isVerifying = true;
     });
 
     try {
-      // If code is "000000", proceed with verification
-      await ref.read(authRepositoryProvider).verifyOtp(_code);
+      final session = ref.read(registrationSessionProvider);
+      if (session?.otpReference == null) {
+        throw StateError('Registration session is missing. Start again.');
+      }
+      final verified = await ref
+          .read(authRepositoryProvider)
+          .verifyOtp(
+            phoneNumber: session!.phoneNumber,
+            otp: _code,
+            otpReference: session.otpReference!,
+          );
 
       if (!mounted) return;
 
+      if (!verified) {
+        setState(() => _isVerifying = false);
+        _showEnterCorrectCodePopup();
+        return;
+      }
+
+      ref.read(registrationSessionProvider.notifier).state = session.copyWith(
+        otpVerified: true,
+      );
+
       // Navigate on success
       context.push(Routes.addBvn);
-    } catch (e) {
-      // Handle error if needed
+    } catch (error) {
       if (mounted) {
-        setState(() {
-          _isVerifying = false;
-        });
-        // Optionally show error message
+        setState(() => _isVerifying = false);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
       }
     }
   }
@@ -154,18 +164,42 @@ class _VerifyStartkeyScreenState extends ConsumerState<VerifyStartkeyScreen> {
     );
   }
 
-  void _resendCode() {
-    _startCountdown();
-    setState(() {
-      _code = '';
-      _controller.clear();
-      _isVerifying = false;
-    });
+  Future<void> _resendCode() async {
+    final session = ref.read(registrationSessionProvider);
+    if (session?.otpReference == null) return;
+    setState(() => _isVerifying = true);
+    try {
+      final challenge = await ref
+          .read(authRepositoryProvider)
+          .resendOtp(
+            phoneNumber: session!.phoneNumber,
+            otpReference: session.otpReference!,
+          );
+      ref.read(registrationSessionProvider.notifier).state = session.copyWith(
+        otpReference: challenge.otpReference,
+      );
+      if (!mounted) return;
+      _startCountdown();
+      setState(() {
+        _code = '';
+        _controller.clear();
+        _isVerifying = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _isVerifying = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final phone = ref.watch(currentUserProvider)?.phone ?? '0703 208 4888';
+    final phone =
+        ref.watch(registrationSessionProvider)?.phoneNumber ??
+        ref.watch(currentUserProvider)?.phone ??
+        'your phone';
     return Scaffold(
       backgroundColor: const Color(0xFFF4F4F4),
       resizeToAvoidBottomInset: true,

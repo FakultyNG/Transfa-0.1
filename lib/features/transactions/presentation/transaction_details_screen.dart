@@ -21,13 +21,29 @@ class TransactionDetailsScreen extends ConsumerWidget {
       body: FutureBuilder<AppTransaction?>(
         future: repo.get(id),
         builder: (_, snap) {
-          if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+          if (snap.hasError) {
+            return Center(
+              child: Text(
+                'Unable to load this transaction.',
+                style: AppTypography.bodyMuted,
+              ),
+            );
+          }
+          if (!snap.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
           final tx = snap.data;
-          if (tx == null) return Center(child: Text('Not found', style: AppTypography.bodyMuted));
+          if (tx == null) {
+            return Center(
+              child: Text('Not found', style: AppTypography.bodyMuted),
+            );
+          }
           final isCredit = tx.type == TxType.credit;
-          final amountStr = tx.currency == TxCurrency.usd
-              ? AppFormat.usd(tx.amount)
-              : AppFormat.ngn(tx.amount);
+          final amountStr = switch (tx.currency) {
+            TxCurrency.ngn => AppFormat.ngn(tx.amount),
+            TxCurrency.usd => AppFormat.usd(tx.amount),
+            TxCurrency.cny => AppFormat.cny(tx.amount),
+          };
           return ListView(
             padding: const EdgeInsets.symmetric(vertical: 12),
             children: [
@@ -36,11 +52,14 @@ class TransactionDetailsScreen extends ConsumerWidget {
                   width: 88,
                   height: 88,
                   decoration: BoxDecoration(
-                    color: (isCredit ? AppColors.success : AppColors.primary).withValues(alpha: 0.12),
+                    color: (isCredit ? AppColors.success : AppColors.primary)
+                        .withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
-                    isCredit ? Icons.south_west_rounded : Icons.north_east_rounded,
+                    isCredit
+                        ? Icons.south_west_rounded
+                        : Icons.north_east_rounded,
                     size: 44,
                     color: isCredit ? AppColors.success : AppColors.primary,
                   ),
@@ -48,11 +67,18 @@ class TransactionDetailsScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 16),
               Center(
-                child: Text('${isCredit ? '+' : '-'}$amountStr',
-                    style: AppTypography.displayMedium),
+                child: Text(
+                  '${isCredit ? '+' : '-'}$amountStr',
+                  style: AppTypography.displayMedium,
+                ),
               ),
               const SizedBox(height: 4),
-              Center(child: Text(AppFormat.dateTime(tx.createdAt), style: AppTypography.bodyMuted)),
+              Center(
+                child: Text(
+                  AppFormat.dateTime(tx.createdAt),
+                  style: AppTypography.bodyMuted,
+                ),
+              ),
               const SizedBox(height: 24),
               Container(
                 padding: const EdgeInsets.all(16),
@@ -65,11 +91,16 @@ class TransactionDetailsScreen extends ConsumerWidget {
                   children: [
                     _Row(label: 'Status', value: tx.status.name),
                     _Row(label: 'Reference', value: tx.id),
-                    _Row(label: isCredit ? 'From' : 'To', value: tx.counterpartyName),
+                    _Row(
+                      label: isCredit ? 'From' : 'To',
+                      value: tx.counterpartyName,
+                    ),
                     if (tx.counterpartyAccount != null)
                       _Row(label: 'Account', value: tx.counterpartyAccount!),
-                    if (tx.bankName != null) _Row(label: 'Bank / Network', value: tx.bankName!),
-                    if ((tx.memo ?? '').isNotEmpty) _Row(label: 'Memo', value: tx.memo!),
+                    if (tx.bankName != null)
+                      _Row(label: 'Bank / Network', value: tx.bankName!),
+                    if ((tx.memo ?? '').isNotEmpty)
+                      _Row(label: 'Memo', value: tx.memo!),
                   ],
                 ),
               ),
@@ -97,7 +128,11 @@ class _Row extends StatelessWidget {
           Text(label, style: AppTypography.bodyMuted),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(value, textAlign: TextAlign.end, style: AppTypography.body),
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              style: AppTypography.body,
+            ),
           ),
         ],
       ),

@@ -13,7 +13,7 @@ import '../../../shared/widgets/transfa_logo.dart';
 import '../../../shared/widgets/wallpaper_scaffold.dart';
 import '../../../features/pop-ups/viewBalance_popup.dart';
 import '../../../features/pop-ups/transfaAccountShare_popup.dart';
-import '../../../features/pop-ups/cashDrop_popup.dart';
+import '../../../features/pop-ups/cashdrop_popup.dart';
 
 /// iOS-style home: bell top-right, "🏠 Home" title, frosted balance widget
 /// with profile + balance + Add Money pill, then a grid of app icons.
@@ -103,7 +103,7 @@ class DashboardScreen extends ConsumerWidget {
                   label: 'Support',
                   background: const Color(0xFF1976FF),
                   iconScale: 1,
-                  onTap: () => context.push(Routes.memoChat),
+                  onTap: () => context.push(Routes.support),
                   child: Image.asset(Assets.appIconSupport, fit: BoxFit.cover),
                 ),
                 _HomeAppIcon(
@@ -193,7 +193,7 @@ class DashboardScreen extends ConsumerWidget {
       context: context,
       barrierDismissible: true,
       barrierColor: Colors.black.withValues(alpha: 0.7),
-      builder: (context) => const CashDropPopup(),
+      builder: (context) => const CashDropScreen(),
     );
   }
 }

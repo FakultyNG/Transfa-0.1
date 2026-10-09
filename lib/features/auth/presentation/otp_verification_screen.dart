@@ -14,7 +14,8 @@ class OtpVerificationScreen extends ConsumerStatefulWidget {
   const OtpVerificationScreen({super.key});
 
   @override
-  ConsumerState<OtpVerificationScreen> createState() => _OtpVerificationScreenState();
+  ConsumerState<OtpVerificationScreen> createState() =>
+      _OtpVerificationScreenState();
 }
 
 class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
@@ -23,21 +24,33 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
 
   Future<void> _verify() async {
     setState(() => _loading = true);
-    final ok = await ref.read(authRepositoryProvider).verifyOtp(_otp);
+    final session = ref.read(registrationSessionProvider);
+    if (session?.otpReference == null) {
+      setState(() => _loading = false);
+      return;
+    }
+    final ok = await ref
+        .read(authRepositoryProvider)
+        .verifyOtp(
+          phoneNumber: session!.phoneNumber,
+          otp: _otp,
+          otpReference: session.otpReference!,
+        );
     if (!mounted) return;
     setState(() => _loading = false);
     if (ok) {
       context.push(Routes.createPin);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Invalid code. Try again.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Invalid code. Try again.')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final email = ref.watch(currentUserProvider)?.email ?? 'your email';
+    final phone =
+        ref.watch(registrationSessionProvider)?.phoneNumber ?? 'your phone';
     return AppScaffold(
       appBar: AppBar(),
       body: Column(
@@ -46,7 +59,10 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
           const SizedBox(height: 12),
           Text('Verify your code', style: AppTypography.headingLarge),
           const SizedBox(height: 8),
-          Text('We sent a 6-digit code to $email.', style: AppTypography.bodyMuted),
+          Text(
+            'We sent a 6-digit code to $phone.',
+            style: AppTypography.bodyMuted,
+          ),
           const SizedBox(height: 32),
           PinCodeTextField(
             appContext: context,
@@ -74,8 +90,12 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
           Center(
             child: TextButton(
               onPressed: () {},
-              child: Text("Didn't receive it? Resend",
-                  style: AppTypography.bodyStrong.copyWith(color: AppColors.primary)),
+              child: Text(
+                "Didn't receive it? Resend",
+                style: AppTypography.bodyStrong.copyWith(
+                  color: AppColors.primary,
+                ),
+              ),
             ),
           ),
           const Spacer(),

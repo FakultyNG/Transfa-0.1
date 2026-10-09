@@ -14,9 +14,11 @@ class TransactionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isCredit = tx.type == TxType.credit;
-    final amountStr = (tx.currency == TxCurrency.usd
-            ? AppFormat.usd(tx.amount)
-            : AppFormat.ngn(tx.amount));
+    final amountStr = switch (tx.currency) {
+      TxCurrency.ngn => AppFormat.ngn(tx.amount),
+      TxCurrency.usd => AppFormat.usd(tx.amount),
+      TxCurrency.cny => AppFormat.cny(tx.amount),
+    };
     final sign = isCredit ? '+' : '-';
     final amountColor = isCredit ? AppColors.success : AppColors.textPrimary;
 
@@ -31,7 +33,9 @@ class TransactionTile extends StatelessWidget {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: isCredit ? AppColors.success.withValues(alpha: 0.12) : AppColors.surfaceMuted,
+                color: isCredit
+                    ? AppColors.success.withValues(alpha: 0.12)
+                    : AppColors.surfaceMuted,
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Icon(
@@ -45,10 +49,12 @@ class TransactionTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(tx.counterpartyName,
-                      style: AppTypography.bodyStrong.copyWith(fontSize: 15),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
+                  Text(
+                    tx.counterpartyName,
+                    style: AppTypography.bodyStrong.copyWith(fontSize: 15),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   const SizedBox(height: 2),
                   Text(
                     '${AppFormat.dateTime(tx.createdAt)}${tx.bankName != null ? ' • ${tx.bankName}' : ''}',
@@ -63,8 +69,13 @@ class TransactionTile extends StatelessWidget {
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text('$sign$amountStr',
-                    style: AppTypography.bodyStrong.copyWith(color: amountColor, fontSize: 15)),
+                Text(
+                  '$sign$amountStr',
+                  style: AppTypography.bodyStrong.copyWith(
+                    color: amountColor,
+                    fontSize: 15,
+                  ),
+                ),
                 const SizedBox(height: 2),
                 _StatusChip(status: tx.status),
               ],
@@ -103,8 +114,14 @@ class _StatusChip extends StatelessWidget {
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
-      child: Text(label, style: AppTypography.small.copyWith(color: fg, fontSize: 11)),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        label,
+        style: AppTypography.small.copyWith(color: fg, fontSize: 11),
+      ),
     );
   }
 }

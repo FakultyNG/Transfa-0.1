@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "837821009644",
+    "project_id": "transfa-39509",
+    "storage_bucket": "transfa-39509.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:837821009644:android:e2b27d465bba5902d2dfc9",
+        "android_client_info": {
+          "package_name": "com.transfa.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBdH41jld8aJHF9BDKWLUCU0R-JmUUBOpQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

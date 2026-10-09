@@ -8,6 +8,7 @@ import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../data/mock_api/mock_data.dart';
+import '../../../data/notifications/push_notification_service.dart';
 import '../../../data/repositories/repositories.dart';
 import '../../../shared/widgets/homeFab.dart';
 
@@ -96,6 +97,31 @@ class SettingsScreen extends ConsumerWidget {
                       ),
                       label: 'Security',
                       onTap: () => context.push(Routes.security),
+                    ),
+                    const Divider(color: Color(0x080A0A0A), height: 1),
+                    _SettingsRow(
+                      icon: const Icon(
+                        Icons.logout_rounded,
+                        color: AppColors.error,
+                        size: 28,
+                      ),
+                      label: 'Log out',
+                      onTap: () async {
+                        try {
+                          await ref
+                              .read(pushNotificationServiceProvider)
+                              .deactivate();
+                          await ref.read(authRepositoryProvider).logout();
+                        } finally {
+                          ref.read(currentUserProvider.notifier).state = null;
+                          ref.invalidate(walletProvider);
+                          ref.invalidate(transactionsProvider);
+                          ref.invalidate(sessionRestorationProvider);
+                          if (context.mounted) {
+                            context.go(Routes.welcomeIntro);
+                          }
+                        }
+                      },
                     ),
                   ],
                 ),

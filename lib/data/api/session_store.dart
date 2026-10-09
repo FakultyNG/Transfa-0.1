@@ -1,0 +1,47 @@
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
+class AuthSession {
+  const AuthSession({required this.accessToken, this.refreshToken});
+
+  final String accessToken;
+  final String? refreshToken;
+}
+
+abstract interface class SessionStore {
+  Future<String?> readAccessToken();
+  Future<String?> readRefreshToken();
+  Future<void> write(AuthSession session);
+  Future<void> clear();
+}
+
+class SecureSessionStore implements SessionStore {
+  SecureSessionStore({FlutterSecureStorage? storage})
+    : _storage = storage ?? const FlutterSecureStorage();
+
+  static const _accessTokenKey = 'transfa_access_token';
+  static const _refreshTokenKey = 'transfa_refresh_token';
+
+  final FlutterSecureStorage _storage;
+
+  @override
+  Future<String?> readAccessToken() => _storage.read(key: _accessTokenKey);
+
+  @override
+  Future<String?> readRefreshToken() => _storage.read(key: _refreshTokenKey);
+
+  @override
+  Future<void> write(AuthSession session) async {
+    await _storage.write(key: _accessTokenKey, value: session.accessToken);
+    if (session.refreshToken case final refreshToken?) {
+      await _storage.write(key: _refreshTokenKey, value: refreshToken);
+    } else {
+      await _storage.delete(key: _refreshTokenKey);
+    }
+  }
+
+  @override
+  Future<void> clear() async {
+    await _storage.delete(key: _accessTokenKey);
+    await _storage.delete(key: _refreshTokenKey);
+  }
+}

@@ -7,6 +7,7 @@ import '../../features/auth/presentation/identity_verification_screen.dart';
 import '../../features/auth/presentation/location_screen.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/onboarding_screen.dart';
+import '../../features/auth/presentation/passcode_reset_screen.dart';
 import '../../features/auth/presentation/photo_id_guide_screen.dart';
 import '../../features/auth/presentation/photo_id_screen.dart';
 import '../../features/auth/presentation/privacy_info_screen.dart';
@@ -22,6 +23,7 @@ import '../../features/dashboard/presentation/add_money_screen.dart';
 import '../../features/dashboard/presentation/dashboard_screen.dart';
 import '../../features/dashboard/presentation/dev_menu_screen.dart';
 import '../../features/dashboard/presentation/share_account_screen.dart';
+import '../../features/gift_cards/presentation/gift_cards_screen.dart';
 import '../../features/notifications/presentation/notifications_screen.dart';
 import '../../features/settings/presentation/change_password_screen.dart';
 import '../../features/settings/presentation/legal_screen.dart';
@@ -29,6 +31,7 @@ import '../../features/settings/presentation/limits_screen.dart';
 import '../../features/settings/presentation/privacy_policy_screen.dart';
 import '../../features/settings/presentation/privacy_screen.dart';
 import '../../features/settings/presentation/profile_screen.dart';
+import '../../features/settings/presentation/profile_edit_screen.dart';
 import '../../features/settings/presentation/security_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
 import '../../features/auth/presentation/register_phone_screen.dart';
@@ -36,10 +39,13 @@ import '../../features/auth/presentation/unlock_screens.dart';
 import '../../features/support/presentation/memo_chat_screen.dart';
 import '../../features/support/presentation/support_chat_screen.dart';
 import '../../features/support/presentation/support_screen.dart';
+import '../../features/support/presentation/support_ticket_screen.dart';
 import '../../features/wallet/presentation/wallet_widget_screen.dart';
+import '../../features/wallet/presentation/wallet_overview_screen.dart';
 import '../../features/transactions/presentation/transaction_details_screen.dart';
 import '../../features/transactions/presentation/transaction_history_screen.dart';
 import '../../features/transfers/presentation/amount_keypad_screen.dart';
+import '../../features/transfers/presentation/beneficiaries_screen.dart';
 import '../../features/transfers/presentation/amount_currency_sheet.dart';
 import '../../features/transfers/presentation/info_modals.dart';
 import '../../features/transfers/presentation/status_screens.dart';
@@ -84,7 +90,7 @@ GoRoute slideRoute(String path, Widget page) {
 
 final goRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
-    initialLocation: Routes.welcomeIntro,
+    initialLocation: Routes.splash,
     routes: [
       // Boot / pre-auth
       slideRoute(Routes.splash, const SplashScreen()),
@@ -125,7 +131,15 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       slideRoute(Routes.shareAccount, const ShareAccountScreen()),
       slideRoute(Routes.support, const SupportScreen()),
       slideRoute(Routes.supportChat, const SupportChatScreen()),
+      GoRoute(
+        path: Routes.supportTicket,
+        pageBuilder: (context, state) => buildPageWithTransition(
+          SupportTicketScreen(id: state.pathParameters['id']!),
+        ),
+      ),
       slideRoute(Routes.walletWidget, const WalletWidgetScreen()),
+      slideRoute(Routes.walletOverview, const WalletOverviewScreen()),
+      slideRoute(Routes.giftCards, const GiftCardsScreen()),
       slideRoute(Routes.transactions, const TransactionHistoryScreen()),
 
       GoRoute(
@@ -138,6 +152,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       slideRoute(Routes.transfer, const TransferScreen()),
       slideRoute(Routes.transferDetails, const TransferDetailsScreen()),
       slideRoute(Routes.transferConfirm, const TransferConfirmScreen()),
+      slideRoute(Routes.beneficiaries, const BeneficiariesScreen()),
 
       // New transfer flow (Transfa AI)
       slideRoute(Routes.transfaAi, const TransfaAiScreen()),
@@ -181,7 +196,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       slideRoute(Routes.unlockPasscode, const UnlockPasscodeScreen()),
       slideRoute(Routes.payPasscode, const PayPasscodeScreen()),
       slideRoute(Routes.securityLockout, const SecurityLockoutScreen()),
-      slideRoute(Routes.forgotPasscode, const ForgotPasscodeScreen()),
+      slideRoute(Routes.forgotPasscode, const PasscodeResetScreen()),
       slideRoute(Routes.recoveryStartkey, const RecoveryStartkeyScreen()),
 
       // Memo support chat
@@ -202,6 +217,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // Settings
       slideRoute(Routes.settings, const SettingsScreen()),
       slideRoute(Routes.profile, const ProfileScreen()),
+      slideRoute(Routes.profileEdit, const ProfileEditScreen()),
       slideRoute(Routes.privacy, const PrivacyScreen()),
       slideRoute(Routes.security, const SecurityScreen()),
       slideRoute(Routes.limits, const LimitsScreen()),

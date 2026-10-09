@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../core/theme/app_colors.dart';
 import '../../core/utils/responsive.dart';
 
 class ResponsiveScaffold extends StatelessWidget {
@@ -10,14 +12,14 @@ class ResponsiveScaffold extends StatelessWidget {
   final bool resizeToAvoidBottomInset;
 
   const ResponsiveScaffold({
-    Key? key,
+    super.key,
     this.title,
     required this.body,
     this.actions,
     this.floatingActionButton,
     this.backgroundColor,
     this.resizeToAvoidBottomInset = true,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

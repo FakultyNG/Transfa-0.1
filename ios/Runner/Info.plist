@@ -45,8 +45,14 @@
 		<true/>
 		<key>UIApplicationSupportsIndirectInputEvents</key>
 		<true/>
+		<key>UIBackgroundModes</key>
+		<array>
+			<string>remote-notification</string>
+		</array>
 		<key>NSCameraUsageDescription</key>
 		<string>We need camera access to capture your face for identity verification</string>
+		<key>NSFaceIDUsageDescription</key>
+		<string>Use Face ID to securely access your Transfa account.</string>
 		<!-- ios/Runner/Info.plist -->
 		<key>LSApplicationQueriesSchemes</key>
 		<array>

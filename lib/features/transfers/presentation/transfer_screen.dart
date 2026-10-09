@@ -6,8 +6,6 @@ import 'package:go_router/go_router.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
-import '../../../core/utils/formatters.dart';
-import '../../../data/mock_api/mock_data.dart';
 import '../../../data/models/transaction.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 import '../../../shared/widgets/primary_button.dart';
@@ -24,13 +22,8 @@ class _TransferScreenState extends ConsumerState<TransferScreen> {
   final _amount = TextEditingController();
   TxCurrency _currency = TxCurrency.ngn;
 
-  double? get _parsedAmount => double.tryParse(_amount.text.replaceAll(',', ''));
-
-  double? get _ngnEquivalent {
-    final v = _parsedAmount;
-    if (v == null) return null;
-    return _currency == TxCurrency.usd ? v * MockData.usdToNgnRate : v;
-  }
+  double? get _parsedAmount =>
+      double.tryParse(_amount.text.replaceAll(',', ''));
 
   void _openCurrencySheet() {
     showModalBottomSheet(
@@ -50,7 +43,10 @@ class _TransferScreenState extends ConsumerState<TransferScreen> {
               child: Container(
                 width: 44,
                 height: 4,
-                decoration: BoxDecoration(color: AppColors.divider, borderRadius: BorderRadius.circular(20)),
+                decoration: BoxDecoration(
+                  color: AppColors.divider,
+                  borderRadius: BorderRadius.circular(20),
+                ),
               ),
             ),
             const SizedBox(height: 18),
@@ -63,6 +59,16 @@ class _TransferScreenState extends ConsumerState<TransferScreen> {
               selected: _currency == TxCurrency.ngn,
               onTap: () {
                 setState(() => _currency = TxCurrency.ngn);
+                Navigator.pop(context);
+              },
+            ),
+            _CurrencyRow(
+              flag: '🇨🇳',
+              code: 'CNY',
+              name: 'Chinese Yuan payout',
+              selected: _currency == TxCurrency.cny,
+              onTap: () {
+                setState(() => _currency = TxCurrency.cny);
                 Navigator.pop(context);
               },
             ),
@@ -93,10 +99,27 @@ class _TransferScreenState extends ConsumerState<TransferScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final symbol = _currency == TxCurrency.usd ? '\$' : '₦';
-    final equivalent = _ngnEquivalent;
+    final symbol = switch (_currency) {
+      TxCurrency.ngn => '₦',
+      TxCurrency.usd => '\$',
+      TxCurrency.cny => '¥',
+    };
+    final flag = switch (_currency) {
+      TxCurrency.ngn => '🇳🇬',
+      TxCurrency.usd => '🇺🇸',
+      TxCurrency.cny => '🇨🇳',
+    };
     return AppScaffold(
-      appBar: AppBar(title: const Text('Send money')),
+      appBar: AppBar(
+        title: const Text('Send money'),
+        actions: [
+          IconButton(
+            tooltip: 'Recent recipients',
+            onPressed: () => context.push(Routes.beneficiaries),
+            icon: const Icon(Icons.people_outline_rounded),
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.symmetric(vertical: 12),
         children: [
@@ -114,15 +137,23 @@ class _TransferScreenState extends ConsumerState<TransferScreen> {
               ),
               child: Row(
                 children: [
-                  Text(_currency == TxCurrency.usd ? '🇺🇸' : '🇳🇬',
-                      style: const TextStyle(fontSize: 20)),
+                  Text(flag, style: const TextStyle(fontSize: 20)),
                   const SizedBox(width: 10),
-                  Text(_currency == TxCurrency.usd ? 'USD' : 'NGN',
-                      style: AppTypography.bodyStrong),
-                  const Icon(Icons.expand_more_rounded, color: AppColors.textMuted),
+                  Text(
+                    _currency.name.toUpperCase(),
+                    style: AppTypography.bodyStrong,
+                  ),
+                  const Icon(
+                    Icons.expand_more_rounded,
+                    color: AppColors.textMuted,
+                  ),
                   const Spacer(),
-                  Text('Tap to switch',
-                      style: AppTypography.caption.copyWith(color: AppColors.primary)),
+                  Text(
+                    'Tap to switch',
+                    style: AppTypography.caption.copyWith(
+                      color: AppColors.primary,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -133,14 +164,22 @@ class _TransferScreenState extends ConsumerState<TransferScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text(symbol,
-                    style: AppTypography.displayLarge.copyWith(color: AppColors.textMuted)),
+                Text(
+                  symbol,
+                  style: AppTypography.displayLarge.copyWith(
+                    color: AppColors.textMuted,
+                  ),
+                ),
                 const SizedBox(width: 6),
                 Expanded(
                   child: TextField(
                     controller: _amount,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+                    ],
                     textAlign: TextAlign.start,
                     style: AppTypography.displayLarge.copyWith(fontSize: 40),
                     decoration: const InputDecoration(
@@ -155,16 +194,6 @@ class _TransferScreenState extends ConsumerState<TransferScreen> {
               ],
             ),
           ),
-          if (_currency == TxCurrency.usd && equivalent != null && equivalent > 0)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Center(
-                child: Text(
-                  '≈ ${AppFormat.ngn(equivalent)} at ₦${MockData.usdToNgnRate.toStringAsFixed(0)}/USD',
-                  style: AppTypography.caption,
-                ),
-              ),
-            ),
           const SizedBox(height: 32),
           PrimaryButton(
             label: 'Continue',
@@ -197,9 +226,13 @@ class _CurrencyRow extends StatelessWidget {
         margin: const EdgeInsets.symmetric(vertical: 6),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: selected ? AppColors.primary.withValues(alpha: 0.06) : AppColors.surfaceMuted,
+          color: selected
+              ? AppColors.primary.withValues(alpha: 0.06)
+              : AppColors.surfaceMuted,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: selected ? AppColors.primary : AppColors.divider),
+          border: Border.all(
+            color: selected ? AppColors.primary : AppColors.divider,
+          ),
         ),
         child: Row(
           children: [
@@ -214,7 +247,8 @@ class _CurrencyRow extends StatelessWidget {
                 ],
               ),
             ),
-            if (selected) const Icon(Icons.check_circle_rounded, color: AppColors.primary),
+            if (selected)
+              const Icon(Icons.check_circle_rounded, color: AppColors.primary),
           ],
         ),
       ),

@@ -1,16 +1,63 @@
 # Transfa
 
-A new Flutter project.
+Transfa is a Flutter fintech application centered on an NGN wallet, dedicated
+funding account, local and international transfers, transaction history, and
+identity verification.
 
-## Getting Started
+## Stack
 
-This project is a starting point for a Flutter application.
+- Flutter and Dart
+- Riverpod for state and dependency injection
+- GoRouter for navigation
+- Dio for the REST transport
+- Flutter Secure Storage for access and refresh tokens
+- Camera, image/file pickers, local authentication, URL launching, permissions,
+  and connectivity plugins for native flows
 
-A few resources to get you started if this is your first Flutter project:
+## Project Structure
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+```text
+lib/
+  core/          Configuration, routing, theme, and utilities
+  data/          API adapters, models, mock data, and repositories
+  features/      Feature-oriented screens and state
+  shared/        Reusable widgets
+```
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+The UI talks to domain repositories, which depend on the `TransfaApi`
+interface. `MockApi` and `RestTransfaApi` implement the same contract, so the
+transport can change without changing feature code.
+
+## Run
+
+The production API is enabled by default:
+
+```shell
+flutter pub get
+flutter run
+```
+
+The configured production base URL is `https://api.transfaintel.xyz`. Override
+it for local or staging environments with:
+
+```shell
+flutter run --dart-define=API_BASE_URL=http://localhost:4000
+```
+
+Run with the local demo backend adapter using:
+
+```shell
+flutter run --dart-define=USE_MOCK_API=true
+```
+
+The initial backend contract and security expectations are documented in
+[`API_REQUIREMENTS.md`](API_REQUIREMENTS.md).
+Implementation coverage and known backend blockers are tracked in
+[`INTEGRATION_STATUS.md`](INTEGRATION_STATUS.md).
+
+## Verification
+
+```shell
+flutter analyze
+flutter test
+```

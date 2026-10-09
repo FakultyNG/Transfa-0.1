@@ -65,13 +65,17 @@ class Routes {
   static const cashDropScan = '/cashdrop/scan';
   static const support = '/support';
   static const supportChat = '/support/chat';
+  static const supportTicket = '/support/tickets/:id';
   static const walletWidget = '/wallet/widget';
+  static const walletOverview = '/wallet/overview';
+  static const giftCards = '/gift-cards';
   static const transactions = '/transactions';
   static const transactionDetails = '/transactions/:id';
 
   static const transfer = '/transfer';
   static const transferDetails = '/transfer/details';
   static const transferConfirm = '/transfer/confirm';
+  static const beneficiaries = '/transfer/beneficiaries';
 
   // New transfer flow (Transfa AI / Pay)
   static const transfaAi = '/transfa-ai';
@@ -97,6 +101,7 @@ class Routes {
   // Settings
   static const settings = '/settings';
   static const profile = '/settings/profile';
+  static const profileEdit = '/settings/profile/edit';
   static const privacy = '/settings/privacy';
   static const security = '/settings/security';
   static const limits = '/settings/limits';

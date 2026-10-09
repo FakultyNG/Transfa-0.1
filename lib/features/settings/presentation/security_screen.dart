@@ -1,28 +1,69 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
+import 'package:local_auth/local_auth.dart';
 
 import '../../../core/constants/assets.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/utils/error_messages.dart';
+import '../../../data/api/device_identity.dart';
+import '../../../data/repositories/repositories.dart';
 import '../../../shared/widgets/glass_card.dart';
 
 /// Security — intro card (green shield), True Face toggle, grouped
-/// Verify/Change Passcode tiles, Use Face ID toggle. Floating back arrow.
-class SecurityScreen extends StatefulWidget {
+/// Verify/change passcode tiles and biometric-login controls.
+class SecurityScreen extends ConsumerStatefulWidget {
   const SecurityScreen({super.key});
 
   @override
-  State<SecurityScreen> createState() => _SecurityScreenState();
+  ConsumerState<SecurityScreen> createState() => _SecurityScreenState();
 }
 
-class _SecurityScreenState extends State<SecurityScreen> {
+class _SecurityScreenState extends ConsumerState<SecurityScreen> {
   bool _trueFace = true;
-  bool _faceId = true;
+  bool _changingBiometric = false;
+
+  Future<void> _setBiometric(bool enabled) async {
+    if (_changingBiometric) return;
+    setState(() => _changingBiometric = true);
+    try {
+      final deviceId = await DeviceIdentity().getOrCreate();
+      final repository = ref.read(deviceFeaturesRepositoryProvider);
+      if (enabled) {
+        final localAuth = LocalAuthentication();
+        final authenticated = await localAuth.authenticate(
+          localizedReason: 'Confirm your identity to enable biometric login',
+          biometricOnly: true,
+        );
+        if (!authenticated) return;
+        final types = await localAuth.getAvailableBiometrics();
+        final method = types.contains(BiometricType.face)
+            ? 'face_id'
+            : types.contains(BiometricType.fingerprint)
+            ? 'fingerprint'
+            : 'biometric';
+        await repository.enableBiometric(method: method, deviceId: deviceId);
+      } else {
+        await repository.disableBiometric(deviceId);
+      }
+      ref.invalidate(biometricStatusProvider);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
+    } finally {
+      if (mounted) setState(() => _changingBiometric = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final biometric = ref.watch(biometricStatusProvider);
+    final biometricEnabled = biometric.value?.enabled ?? false;
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -38,25 +79,38 @@ class _SecurityScreenState extends State<SecurityScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       SizedBox(
-                          width: 60, height: 60,
-                          child: SvgPicture.asset(Assets.security, fit: BoxFit.contain),
+                        width: 60,
+                        height: 60,
+                        child: SvgPicture.asset(
+                          Assets.security,
+                          fit: BoxFit.contain,
                         ),
-                     
+                      ),
+
                       const SizedBox(height: 15),
-                      Text('Security',
-                          style: AppTypography.displayLarge
-                              .copyWith(fontSize: 28, fontWeight: FontWeight.w800)),
+                      Text(
+                        'Security',
+                        style: AppTypography.displayLarge.copyWith(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
                       const SizedBox(height: 8),
-                      Text('Manage how you access your\nTransfa.',
-                          style: AppTypography.body.copyWith(fontSize: 17)),
+                      Text(
+                        'Manage how you access your\nTransfa.',
+                        style: AppTypography.body.copyWith(fontSize: 17),
+                      ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 22),
                 _PillToggle(
                   icon: _PurpleTile(
-                    child: const Icon(Icons.tag_faces_outlined,
-                        color: Colors.white, size: 20),
+                    child: const Icon(
+                      Icons.tag_faces_outlined,
+                      color: Colors.white,
+                      size: 20,
+                    ),
                   ),
                   label: 'True Face',
                   value: _trueFace,
@@ -68,49 +122,63 @@ class _SecurityScreenState extends State<SecurityScreen> {
                   child: Text(
                     'To connect & keep your money private, allow Face Shot to learn about the people who use your Transfa.',
                     style: AppTypography.body.copyWith(
-                        color: AppColors.textMuted, fontSize: 15),
+                      color: AppColors.textMuted,
+                      fontSize: 15,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 22),
-                _GroupedCard(children: [
-                  _ChevronRow(
-                    icon: _GreenLockTile(),
-                    label: 'Verify Passcode',
-                    onTap: () => context.push(Routes.createPin),
-                  ),
-                  const Divider(color: Color(0xFFEEEEEE), height: 1,),
-                  _ChevronRow(
-                    icon: _OrangeLockTile(),
-                    label: 'Change Passcode',
-                    onTap: () => context.push(Routes.changePassword),
-                  ),
-                ]),
+                _GroupedCard(
+                  children: [
+                    _ChevronRow(
+                      icon: _GreenLockTile(),
+                      label: 'Verify Passcode',
+                      onTap: () => context.push(Routes.createPin),
+                    ),
+                    const Divider(color: Color(0xFFEEEEEE), height: 1),
+                    _ChevronRow(
+                      icon: _OrangeLockTile(),
+                      label: 'Change Passcode',
+                      onTap: () => context.push(Routes.changePassword),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 10),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: Text(
                     'Face Shot is required to change your Transfa Passcode.',
-                    style: AppTypography.body
-                        .copyWith(color: AppColors.textMuted, fontSize: 15),
+                    style: AppTypography.body.copyWith(
+                      color: AppColors.textMuted,
+                      fontSize: 15,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 22),
                 _PillToggle(
-                  icon:  SizedBox(
-                      width: 30, height: 30,
-                      child: SvgPicture.asset(Assets.useFaceId, fit: BoxFit.contain),
+                  icon: SizedBox(
+                    width: 30,
+                    height: 30,
+                    child: SvgPicture.asset(
+                      Assets.useFaceId,
+                      fit: BoxFit.contain,
                     ),
-                  
-                  label: 'Use Face ID',
-                  value: _faceId,
-                  onChanged: (v) => setState(() => _faceId = v),
+                  ),
+
+                  label: 'Use biometrics',
+                  value: biometricEnabled,
+                  onChanged: _changingBiometric ? (_) {} : _setBiometric,
                 ),
                 const SizedBox(height: 8),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Text('Unlock and Transfa with Face ID.',
-                      style: AppTypography.body.copyWith(
-                          color: AppColors.textMuted, fontSize: 16)),
+                  child: Text(
+                    'Unlock and Transfa with your device biometrics.',
+                    style: AppTypography.body.copyWith(
+                      color: AppColors.textMuted,
+                      fontSize: 16,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -159,8 +227,10 @@ class _PillToggle extends StatelessWidget {
           SizedBox(width: 44, height: 44, child: Center(child: icon)),
           const SizedBox(width: 5),
           Expanded(
-            child: Text(label,
-                style: AppTypography.subheading.copyWith(fontSize: 17)),
+            child: Text(
+              label,
+              style: AppTypography.subheading.copyWith(fontSize: 17),
+            ),
           ),
           Switch.adaptive(
             value: value,
@@ -201,7 +271,11 @@ class _ChevronRow extends StatelessWidget {
   final Widget icon;
   final String label;
   final VoidCallback onTap;
-  const _ChevronRow({required this.icon, required this.label, required this.onTap});
+  const _ChevronRow({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -214,11 +288,16 @@ class _ChevronRow extends StatelessWidget {
             SizedBox(width: 30, height: 30, child: Center(child: icon)),
             const SizedBox(width: 14),
             Expanded(
-              child: Text(label,
-                  style: AppTypography.subheading.copyWith(fontSize: 17)),
+              child: Text(
+                label,
+                style: AppTypography.subheading.copyWith(fontSize: 17),
+              ),
             ),
-            const Icon(Icons.chevron_right_rounded,
-                color: AppColors.textMuted, size: 16),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: AppColors.textMuted,
+              size: 16,
+            ),
           ],
         ),
       ),
@@ -233,7 +312,8 @@ class _PurpleTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 30, height: 30,
+      width: 30,
+      height: 30,
       decoration: BoxDecoration(
         color: const Color(0xFFAF52DE),
         borderRadius: BorderRadius.circular(12),
@@ -248,7 +328,8 @@ class _GreenLockTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 30, height: 30,
+      width: 30,
+      height: 30,
       decoration: BoxDecoration(
         color: AppColors.success,
         borderRadius: BorderRadius.circular(12),
@@ -263,7 +344,8 @@ class _OrangeLockTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 30, height: 30,
+      width: 30,
+      height: 30,
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [Color(0xFFFFB347), Color(0xFFFF7A00)],
@@ -272,24 +354,6 @@ class _OrangeLockTile extends StatelessWidget {
       ),
       alignment: Alignment.center,
       child: const Icon(Icons.lock_rounded, color: Colors.white, size: 20),
-    );
-  }
-}
-
-class _GreenAppTile extends StatelessWidget {
-  final Widget child;
-  const _GreenAppTile({required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 44, height: 44,
-      decoration: BoxDecoration(
-        color: AppColors.success,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      alignment: Alignment.center,
-      child: child,
     );
   }
 }
@@ -303,7 +367,8 @@ class _BackFab extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 56, height: 56,
+        width: 56,
+        height: 56,
         decoration: BoxDecoration(
           color: Colors.white,
           shape: BoxShape.circle,
@@ -316,8 +381,11 @@ class _BackFab extends StatelessWidget {
           ],
         ),
         alignment: Alignment.center,
-        child: const Icon(Icons.chevron_left_rounded,
-            color: Color(0xFFFF375F), size: 28),
+        child: const Icon(
+          Icons.chevron_left_rounded,
+          color: Color(0xFFFF375F),
+          size: 28,
+        ),
       ),
     );
   }

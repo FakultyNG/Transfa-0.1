@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:go_router/go_router.dart';
 import 'package:transfa/core/constants/assets.dart';
 import 'package:transfa/features/auth/presentation/welcome_screen.dart';
 
-import '../../../core/router/routes.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/utils/error_messages.dart';
 import '../../../data/repositories/repositories.dart';
 import '../../../shared/widgets/keypad_button.dart';
 import '../../../shared/widgets/wallpaper_scaffold.dart';
@@ -42,8 +41,20 @@ class _CreatePinScreenState extends ConsumerState<CreatePinScreen> {
     if (_confirming && _confirm.length == _length) {
       if (_first == _confirm) {
         _isNavigating = true;
-        await ref.read(authRepositoryProvider).createPin(_first);
-        if (mounted) {
+        try {
+          final session = ref.read(registrationSessionProvider);
+          if (session?.registrationToken == null) {
+            throw StateError('Registration session expired. Start again.');
+          }
+          final user = await ref
+              .read(authRepositoryProvider)
+              .completeRegistration(
+                registrationToken: session!.registrationToken!,
+                passcode: _first,
+              );
+          ref.read(currentUserProvider.notifier).state = user;
+          ref.read(registrationSessionProvider.notifier).state = null;
+          if (!mounted) return;
           // Navigate with a clean transition to welcome
           Navigator.of(context).pushReplacement(
             PageRouteBuilder(
@@ -69,6 +80,17 @@ class _CreatePinScreenState extends ConsumerState<CreatePinScreen> {
               transitionDuration: const Duration(milliseconds: 500),
             ),
           );
+        } catch (error) {
+          if (!mounted) return;
+          setState(() {
+            _isNavigating = false;
+            _first = '';
+            _confirm = '';
+            _confirming = false;
+          });
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
         }
       } else {
         // mismatch — reset both, stay on create step

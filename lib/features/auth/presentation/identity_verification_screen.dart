@@ -1,29 +1,34 @@
+import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:camera/camera.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:io';
 import 'dart:async';
 
 import '../../../core/constants/assets.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/utils/error_messages.dart';
+import '../../../data/repositories/repositories.dart';
 import '../../pop-ups/faceShot/failedPopup.dart';
 import '../../pop-ups/faceShot/faceShotPopup.dart';
 import '../../pop-ups/faceShot/successPopup.dart';
 
 List<CameraDescription>? cameras;
 
-class IdentityVerificationScreen extends StatefulWidget {
+class IdentityVerificationScreen extends ConsumerStatefulWidget {
   const IdentityVerificationScreen({super.key});
 
   @override
-  State<IdentityVerificationScreen> createState() =>
+  ConsumerState<IdentityVerificationScreen> createState() =>
       _IdentityVerificationScreenState();
 }
 
-class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
+class _IdentityVerificationScreenState
+    extends ConsumerState<IdentityVerificationScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _pulse = AnimationController(
     vsync: this,
@@ -110,9 +115,10 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
     }
 
     try {
-      final XFile = await _cameraController!.takePicture();
-      final File image = File(XFile.path);
+      final xFile = await _cameraController!.takePicture();
+      final File image = File(xFile.path);
 
+      if (!mounted) return;
       setState(() {
         _capturedFaceImage = image;
         _isFaceCaptured = true;
@@ -122,13 +128,21 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
 
       _captureTimer?.cancel();
 
-      // Simulate face verification (replace with actual API call)
-      await Future.delayed(const Duration(seconds: 2));
+      final session = ref.read(registrationSessionProvider);
+      if (session?.registrationToken == null || session?.kycReference == null) {
+        throw StateError('KYC session expired. Start registration again.');
+      }
+      final bytes = await image.readAsBytes();
+      final selfie = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+      final isSuccess = await ref
+          .read(authRepositoryProvider)
+          .validateBvnSelfie(
+            registrationToken: session!.registrationToken!,
+            kycReference: session.kycReference!,
+            selfieImageBase64: selfie,
+          );
 
-      // For demo purposes, let's say verification succeeds
-      // You can add logic here to determine success/failure
-      final bool isSuccess = true; // Change to false for testing failed popup
-
+      if (!mounted) return;
       setState(() {
         _isVerifying = false;
       });
@@ -138,12 +152,16 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
       } else {
         _showFailedPopup();
       }
-    } catch (e) {
-      debugPrint('Error capturing face: $e');
+    } catch (error) {
+      debugPrint('Error capturing face: $error');
+      if (!mounted) return;
       setState(() {
         _isCapturing = false;
         _isVerifying = false;
       });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
       _showFailedPopup();
     }
   }
@@ -192,29 +210,20 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
                           ),
                         ),
                       ),
-                      if (_isCapturing && _isCameraInitialized)
+                      if (_isVerifying)
+                        const SizedBox(
+                          width: 250,
+                          height: 250,
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                      else if (_isCapturing && _isCameraInitialized)
                         ClipOval(
-                          child: Container(
+                          child: SizedBox(
                             width: 250,
                             height: 250,
                             child: CameraPreview(_cameraController!),
                           ),
                         )
-                      // else if (_isVerifying)
-                      //   ClipOval(
-                      //     child: Container(
-                      //       width: 250,
-                      //       height: 250,
-                      //       decoration: BoxDecoration(
-                      //         color: Colors.black.withValues(alpha: 0.7),
-                      //       ),
-                      //       child: const Center(
-                      //         child: CircularProgressIndicator(
-                      //           color: Colors.white,
-                      //         ),
-                      //       ),
-                      //     ),
-                      //   )
                       else if (_capturedFaceImage != null)
                         ClipOval(
                           child: Container(

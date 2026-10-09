@@ -1,358 +1,163 @@
-import 'dart:ui';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
-import '../../../core/constants/assets.dart';
-import '../../../core/router/routes.dart';
+import '../../core/router/routes.dart';
+import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_typography.dart';
+import '../../core/utils/error_messages.dart';
+import '../../data/models/transaction.dart';
+import '../../data/repositories/repositories.dart';
+import '../transfers/presentation/transfer_state.dart';
 
-class CashDropScreen extends StatefulWidget {
+class CashDropScreen extends ConsumerStatefulWidget {
   const CashDropScreen({super.key});
 
   @override
-  State<CashDropScreen> createState() => _CashDropScreenState();
+  ConsumerState<CashDropScreen> createState() => _CashDropScreenState();
 }
 
-class _CashDropScreenState extends State<CashDropScreen>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _slideController;
-  late Animation<Offset> _slideAnimation;
-  late Animation<double> _fadeAnimation;
-  bool _isPopupVisible = true;
+class _CashDropScreenState extends ConsumerState<CashDropScreen> {
+  bool _loading = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _slideController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 500),
+  Future<void> _setEnabled(bool enabled) async {
+    setState(() => _loading = true);
+    try {
+      final repository = ref.read(deviceFeaturesRepositoryProvider);
+      if (enabled) {
+        await repository.registerCashDrop();
+      } else {
+        await repository.disableCashDrop();
+      }
+      ref.invalidate(cashDropStatusProvider);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _scan() async {
+    final image = await ImagePicker().pickImage(
+      source: ImageSource.camera,
+      imageQuality: 80,
+      maxWidth: 1600,
     );
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, -1),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _slideController, curve: Curves.easeOutCubic));
-    _fadeAnimation = Tween<double>(begin: 0, end: 1)
-        .animate(CurvedAnimation(parent: _slideController, curve: Curves.easeOut));
-    _slideController.forward();
-  }
-
-  @override
-  void dispose() {
-    _slideController.dispose();
-    super.dispose();
-  }
-
-  void _closePopup() {
-    setState(() {
-      _isPopupVisible = false;
-    });
+    if (image == null) return;
+    setState(() => _loading = true);
+    try {
+      final bytes = await image.readAsBytes();
+      final match = await ref
+          .read(deviceFeaturesRepositoryProvider)
+          .resolveCashDrop('data:image/jpeg;base64,${base64Encode(bytes)}');
+      final suggestions = await ref
+          .read(transferRepositoryProvider)
+          .suggestBanks(match.accountNumber);
+      final selected = suggestions.where(
+        (item) => item.bankName.toLowerCase() == match.bankName.toLowerCase(),
+      );
+      final bank = selected.isNotEmpty
+          ? selected.first
+          : suggestions.isNotEmpty
+          ? suggestions.first
+          : null;
+      if (bank == null) {
+        throw StateError('The matched bank could not be resolved safely.');
+      }
+      ref.read(transferDraftProvider.notifier).state = TransferDraft(
+        currency: TxCurrency.ngn,
+        recipientName: match.displayName,
+        recipientAccount: match.accountNumber,
+        bankName: bank.bankName,
+        bankCode: bank.bankCode,
+      );
+      if (!mounted) return;
+      final router = GoRouter.of(context);
+      Navigator.of(context).pop();
+      router.push(Routes.transfer);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final status = ref.watch(cashDropStatusProvider);
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: Stack(
-        children: [
-          // Main Content (visible after popup closes)
-          if (!_isPopupVisible)
-            Container(
-              width: double.infinity,
-              height: double.infinity,
-              color: Colors.white,
-              child: const Center(
-                child: Text(
-                  'CashDrop Content',
-                  style: TextStyle(color: Colors.black),
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        title: const Text('CashDrop'),
+        leading: IconButton(
+          tooltip: 'Close',
+          onPressed: () => Navigator.of(context).pop(),
+          icon: const Icon(Icons.close_rounded),
+        ),
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: status.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (error, _) => Center(child: Text(userFacingError(error))),
+            data: (item) => Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Icon(Icons.face_retouching_natural_rounded, size: 72),
+                const SizedBox(height: 18),
+                Text(
+                  item.enabled ? 'CashDrop is active' : 'Enable CashDrop',
+                  textAlign: TextAlign.center,
+                  style: AppTypography.displayMedium,
                 ),
-              ),
-            ),
-          // Blur overlay when popup is visible
-          if (_isPopupVisible)
-            GestureDetector(
-              onTap: _closePopup,
-              child: Container(
-                width: double.infinity,
-                height: double.infinity,
-                color: Colors.transparent,
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                  child: Container(
-                    color: Colors.black.withValues(alpha: 0.2),
+                const SizedBox(height: 8),
+                Text(
+                  item.enabled
+                      ? 'Your verified profile image can receive CashDrop payments.'
+                      : 'Link your verified profile image and funding account to receive payments.',
+                  textAlign: TextAlign.center,
+                  style: AppTypography.bodyMuted,
+                ),
+                const SizedBox(height: 28),
+                FilledButton.icon(
+                  onPressed: _loading ? null : _scan,
+                  icon: const Icon(Icons.camera_alt_rounded),
+                  label: const Text('Scan profile to pay'),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: _loading ? null : () => _setEnabled(!item.enabled),
+                  icon: Icon(
+                    item.enabled ? Icons.link_off_rounded : Icons.link_rounded,
+                  ),
+                  label: Text(
+                    item.enabled ? 'Disable CashDrop' : 'Enable receiving',
                   ),
                 ),
-              ),
-            ),
-          // Popup
-          if (_isPopupVisible)
-            FadeTransition(
-              opacity: _fadeAnimation,
-              child: SlideTransition(
-                position: _slideAnimation,
-                child: Center(
-                  child: GestureDetector(
-                    onTap: () {},
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Container(
-                        width: 350,
-                        height: 666,
-                        decoration: BoxDecoration(
-                          color: const Color(0x1AFCFCFB),
-                          borderRadius: BorderRadius.circular(56),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.05),
-                              blurRadius: 5,
-                            ),
-                          ],
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(56),
-                          child: BackdropFilter(
-                            filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
-                            child: Material(
-                              color: Colors.transparent,
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.02),
-                                  borderRadius: BorderRadius.circular(56),
-                                ),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const SizedBox(height: 20),
-                                    // Dynamic Island (tappable to close)
-                                    GestureDetector(
-                                      onTap: _closePopup,
-                                      child: Container(
-                                        width: 50,
-                                        height: 10,
-                                        decoration: BoxDecoration(
-                                          color: Colors.black.withValues(alpha: 0.3),
-                                          borderRadius: BorderRadius.circular(35),
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 30),
-                                    // First Name & Face Shot
-                                    Column(
-                                      children: [
-                                        // CashDrop Face with Bubbles
-                                        SizedBox(
-                                          width: 250,
-                                          height: 250,
-                                          child: Stack(
-                                            alignment: Alignment.center,
-                                            children: [
-                                              // Face circle
-                                              ClipOval(
-                                                child: Container(
-                                                  width: 190,
-                                                  height: 190,
-                                                  decoration: BoxDecoration(
-                                                    gradient: const LinearGradient(
-                                                      begin: Alignment.topCenter,
-                                                      end: Alignment.bottomCenter,
-                                                      colors: [Color(0xFF00BCF6), Color(0xFF006EFF)],
-                                                    ),
-                                                    image: const DecorationImage(
-                                                      image: AssetImage(Assets.magic),
-                                                      fit: BoxFit.cover,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                              // Blue bubble - Top
-                                              Positioned(
-                                                top: 10,
-                                                left: 0,
-                                                right: 0,
-                                                child: Center(
-                                                  child: SvgPicture.asset(
-                                                    Assets.blueBubble,
-                                                    width: 45,
-                                                    height: 45,
-                                                    fit: BoxFit.contain,
-                                                  ),
-                                                ),
-                                              ),
-                                              // Yellow bubble - Bottom
-                                              Positioned(
-                                                bottom: 10,
-                                                left: 0,
-                                                right: 0,
-                                                child: Center(
-                                                  child: SvgPicture.asset(
-                                                    Assets.yellowBubble,
-                                                    width: 45,
-                                                    height: 45,
-                                                    fit: BoxFit.contain,
-                                                  ),
-                                                ),
-                                              ),
-                                              // Green bubble - Left
-                                              Positioned(
-                                                left: 7,
-                                                top: 0,
-                                                bottom: 0,
-                                                child: Center(
-                                                  child: SvgPicture.asset(
-                                                    Assets.greenBubble,
-                                                    width: 195,
-                                                    height: 195,
-                                                    fit: BoxFit.contain,
-                                                  ),
-                                                ),
-                                              ),
-                                              // Red bubble - Right
-                                              Positioned(
-                                                right: 7,
-                                                top: 0,
-                                                bottom: 0,
-                                                child: Center(
-                                                  child: SvgPicture.asset(
-                                                    Assets.redBubble,
-                                                    width: 195,
-                                                    height: 195,
-                                                    fit: BoxFit.contain,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        const SizedBox(height: 20),
-                                        // Magic Text
-                                        Material(
-                                          color: Colors.transparent,
-                                          child: Text(
-                                            'Magic',
-                                            style: const TextStyle(
-                                              fontFamily: 'Arial Rounded MT Bold',
-                                              fontSize: 30,
-                                              letterSpacing: 0.02,
-                                              color: Colors.white,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 40),
-                                    // Navigation
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 30),
-                                      child: Column(
-                                        children: [
-                                          Material(
-                                            color: Colors.transparent,
-                                            child: Text(
-                                              'To receive, scan your face with another Transfa.',
-                                              textAlign: TextAlign.center,
-                                              style: TextStyle(
-                                                fontFamily: 'Roboto',
-                                                fontWeight: FontWeight.w400,
-                                                fontSize: 17,
-                                                height: 1.5,
-                                                letterSpacing: 0.02,
-                                                color: Colors.white.withValues(alpha: 0.5),
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(height: 20),
-                                          // CashDrop Navigation
-                                          Row(
-                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                            children: [
-                                              // Home Sweet Home
-                                              GestureDetector(
-                                                onTap: () => context.pop(),
-                                                child: Container(
-                                                  width: 50,
-                                                  height: 50,
-                                                  decoration: BoxDecoration(
-                                                    gradient: const LinearGradient(
-                                                      colors: [Color(0xFFFFC30F), Color(0xFF9747FF)],
-                                                    ),
-                                                    borderRadius: BorderRadius.circular(35),
-                                                  ),
-                                                  child: Center(
-                                                    child: SvgPicture.asset(
-                                                      Assets.home,
-                                                      width: 26,
-                                                      height: 26,
-                                                      fit: BoxFit.contain,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                              // CashDrop Navigation Row
-                                              Container(
-                                                width: 136,
-                                                height: 50,
-                                                decoration: BoxDecoration(
-                                                  color: Colors.white.withValues(alpha: 0.1),
-                                                  borderRadius: BorderRadius.circular(35),
-                                                ),
-                                                child: Row(
-                                                  children: [
-                                                    // Receiving from Everyone
-                                                    Container(
-                                                      width: 62,
-                                                      height: 42,
-                                                      decoration: BoxDecoration(
-                                                        gradient: const LinearGradient(
-                                                          colors: [Color(0xFF00E9F8), Color(0xFF0D7BE1)],
-                                                        ),
-                                                        borderRadius: BorderRadius.circular(35),
-                                                      ),
-                                                      child: Center(
-                                                        child: SvgPicture.asset(
-                                                          Assets.receive,
-                                                          width: 16,
-                                                          height: 20,
-                                                          fit: BoxFit.contain,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                    // CashDrop Off
-                                                    Container(
-                                                      width: 62,
-                                                      height: 42,
-                                                      decoration: BoxDecoration(
-                                                        borderRadius: BorderRadius.circular(35),
-                                                      ),
-                                                      child: Center(
-                                                        child: SvgPicture.asset(
-                                                          Assets.cashDrop,
-                                                          width: 26,
-                                                          height: 26,
-                                                          fit: BoxFit.contain,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(height: 30),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+                if (_loading) ...[
+                  const SizedBox(height: 20),
+                  const LinearProgressIndicator(),
+                ],
+                const Spacer(),
+                Text(
+                  'CashDrop matches verified profile images. It does not scan QR codes.',
+                  textAlign: TextAlign.center,
+                  style: AppTypography.caption,
                 ),
-              ),
+              ],
             ),
-        ],
+          ),
+        ),
       ),
     );
   }

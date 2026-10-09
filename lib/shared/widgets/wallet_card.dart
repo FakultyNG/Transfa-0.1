@@ -29,7 +29,9 @@ class _WalletCardState extends State<WalletCard> {
 
   @override
   Widget build(BuildContext context) {
-    final balanceLabel = _hidden ? '₦ ••••••••' : AppFormat.ngn(widget.wallet.ngnBalance);
+    final balanceLabel = _hidden
+        ? '₦ ••••••••'
+        : AppFormat.ngn(widget.wallet.ngnBalance);
     return GestureDetector(
       onTap: widget.onTap,
       child: Container(
@@ -51,8 +53,10 @@ class _WalletCardState extends State<WalletCard> {
           children: [
             Row(
               children: [
-                Text('Wallet balance',
-                    style: AppTypography.caption.copyWith(color: Colors.white70)),
+                Text(
+                  'Wallet balance',
+                  style: AppTypography.caption.copyWith(color: Colors.white70),
+                ),
                 const Spacer(),
                 InkWell(
                   borderRadius: BorderRadius.circular(20),
@@ -60,7 +64,9 @@ class _WalletCardState extends State<WalletCard> {
                   child: Padding(
                     padding: const EdgeInsets.all(4),
                     child: Icon(
-                      _hidden ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                      _hidden
+                          ? Icons.visibility_off_rounded
+                          : Icons.visibility_rounded,
                       color: Colors.white70,
                       size: 18,
                     ),
@@ -74,20 +80,29 @@ class _WalletCardState extends State<WalletCard> {
               child: Text(
                 balanceLabel,
                 key: ValueKey(balanceLabel),
-                style: AppTypography.displayMedium.copyWith(color: Colors.white),
+                style: AppTypography.displayMedium.copyWith(
+                  color: Colors.white,
+                ),
               ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '≈ ${AppFormat.usd(widget.wallet.usdEquivalent)} USD',
-              style: AppTypography.caption.copyWith(color: Colors.white70),
             ),
             const SizedBox(height: 20),
             Row(
               children: [
-                Expanded(child: _Action(label: 'Add money', icon: Icons.add_rounded, onTap: widget.onAddMoney)),
+                Expanded(
+                  child: _Action(
+                    label: 'Add money',
+                    icon: Icons.add_rounded,
+                    onTap: widget.onAddMoney,
+                  ),
+                ),
                 const SizedBox(width: 12),
-                Expanded(child: _Action(label: 'Send', icon: Icons.north_east_rounded, onTap: widget.onSend)),
+                Expanded(
+                  child: _Action(
+                    label: 'Send',
+                    icon: Icons.north_east_rounded,
+                    onTap: widget.onSend,
+                  ),
+                ),
               ],
             ),
           ],
@@ -121,7 +136,13 @@ class _Action extends StatelessWidget {
           children: [
             Icon(icon, size: 18, color: Colors.white),
             const SizedBox(width: 8),
-            Text(label, style: AppTypography.body.copyWith(color: Colors.white, fontSize: 15)),
+            Text(
+              label,
+              style: AppTypography.body.copyWith(
+                color: Colors.white,
+                fontSize: 15,
+              ),
+            ),
           ],
         ),
       ),

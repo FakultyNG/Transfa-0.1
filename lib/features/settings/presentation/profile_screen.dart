@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/assets.dart';
+import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
-import '../../../data/mock_api/mock_data.dart';
 import '../../../data/repositories/repositories.dart';
 import '../../../shared/widgets/glass_card.dart';
 
@@ -18,8 +17,12 @@ class ProfileScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final user = ref.watch(currentUserProvider) ?? MockData.currentUser;
-    final firstName = user.fullName.split(' ').first;
+    final profile = ref.watch(profileProvider);
+    final kycStatus = ref.watch(kycStatusProvider);
+    final user = profile.asData?.value ?? ref.watch(currentUserProvider);
+    final firstName = (user?.fullName.trim().isNotEmpty ?? false)
+        ? user!.fullName.trim().split(' ').first
+        : 'Transfa';
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -85,7 +88,7 @@ class ProfileScreen extends ConsumerWidget {
                         ),
                       ),
                       label: 'Born',
-                      value: 'Friday, December 10',
+                      value: user?.dateOfBirth ?? 'Not provided',
                     ),
                     const Divider(
                       color: Color(0xFFEEEEEE),
@@ -102,7 +105,7 @@ class ProfileScreen extends ConsumerWidget {
                         ),
                       ),
                       label: 'Phone',
-                      value: '0703 208 4888',
+                      value: user?.phone ?? 'Not provided',
                     ),
                   ],
                 ),
@@ -119,8 +122,10 @@ class ProfileScreen extends ConsumerWidget {
                           fit: BoxFit.contain,
                         ),
                       ),
-                      label: 'NIN',
-                      value: '0000 1111 00002222',
+                      label: 'Email',
+                      value: (user?.email.isNotEmpty ?? false)
+                          ? user!.email
+                          : 'Not provided',
                     ),
                     const Divider(
                       color: Color(0xFFEEEEEE),
@@ -136,11 +141,12 @@ class ProfileScreen extends ConsumerWidget {
                           fit: BoxFit.contain,
                         ),
                       ),
-                      label: 'BVN',
-                      value: '0000 1111 00002222',
+                      label: 'KYC',
+                      value:
+                          kycStatus.value?['kycStatus']?.toString() ??
+                          user?.kycStatus ??
+                          'Not started',
                     ),
-                    
-                    
                   ],
                 ),
                 const SizedBox(height: 20),
@@ -165,6 +171,16 @@ class ProfileScreen extends ConsumerWidget {
               ],
             ),
             Positioned(
+              right: 20,
+              bottom: 16,
+              child: FloatingActionButton.small(
+                heroTag: 'edit-profile',
+                tooltip: 'Edit profile',
+                onPressed: () => context.push(Routes.profileEdit),
+                child: const Icon(Icons.edit_rounded),
+              ),
+            ),
+            Positioned(
               left: 20,
               bottom: 16,
               child: _BackFab(onTap: () => context.pop()),
@@ -179,8 +195,7 @@ class ProfileScreen extends ConsumerWidget {
 class _PillRow extends StatelessWidget {
   final Widget leading;
   final Widget child;
-  final Widget? trailing;
-  const _PillRow({required this.leading, required this.child, this.trailing});
+  const _PillRow({required this.leading, required this.child});
 
   @override
   Widget build(BuildContext context) {
@@ -203,7 +218,6 @@ class _PillRow extends StatelessWidget {
           SizedBox(width: 40, child: Center(child: leading)),
           const SizedBox(width: 8),
           Expanded(child: child),
-          ?trailing,
         ],
       ),
     );
@@ -248,25 +262,31 @@ class _Row extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           // Left section: icon + label
-          Row(
-            children: [
-              SizedBox(width: 40, child: Center(child: icon)),
-              const SizedBox(width: 12),
-              Text(
-                label,
-                style: AppTypography.subheading.copyWith(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
+          Expanded(
+            child: Row(
+              children: [
+                SizedBox(width: 40, child: Center(child: icon)),
+                const SizedBox(width: 12),
+                Text(
+                  label,
+                  style: AppTypography.subheading.copyWith(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           // Right section: value
-          Text(
-            value,
-            style: AppTypography.subheading.copyWith(
-              fontSize: 17,
-              color: AppColors.textMuted,
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.subheading.copyWith(
+                fontSize: 17,
+                color: AppColors.textMuted,
+              ),
             ),
           ),
         ],

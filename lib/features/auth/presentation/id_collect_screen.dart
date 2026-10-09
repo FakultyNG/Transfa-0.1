@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:ui' show ImageFilter;
 import '../../../core/constants/assets.dart';
@@ -8,6 +9,8 @@ import '../../../shared/widgets/pill_button.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/utils/error_messages.dart';
+import '../../../data/repositories/repositories.dart';
 import '../../../shared/widgets/glass_card.dart';
 import '../../../features/pop-ups/transfaBankPrivacy_popup.dart';
 
@@ -523,7 +526,7 @@ class _IdVerificationModalContent extends StatelessWidget {
   }
 }
 
-class AddBvnScreen extends StatelessWidget {
+class AddBvnScreen extends ConsumerWidget {
   const AddBvnScreen({super.key});
 
   String _formatIdNumber(String number) {
@@ -532,7 +535,7 @@ class AddBvnScreen extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return IdCollectScreen(
       iconBuilder: (_) => Container(
         decoration: BoxDecoration(
@@ -554,16 +557,40 @@ class AddBvnScreen extends StatelessWidget {
           'Earn money across Nigeria and\naccess banking & capital services.',
       placeholder: '2342 7699 875',
       footerLookupLabel: 'My BVN',
-      onContinue: (enteredNumber) {
-        showIdVerificationPopup(
-          context,
-          enteredNumber: enteredNumber,
-          formattedNumber: _formatIdNumber(enteredNumber),
-          idType: 'BVN',
-          onConfirm: () {
-            context.push(Routes.identityVerification);
-          },
-        );
+      onContinue: (enteredNumber) async {
+        final session = ref.read(registrationSessionProvider);
+        if (session?.registrationToken == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Registration session expired.')),
+          );
+          return;
+        }
+        try {
+          final verification = await ref
+              .read(authRepositoryProvider)
+              .verifyBvn(
+                registrationToken: session!.registrationToken!,
+                bvn: enteredNumber,
+              );
+          ref.read(registrationSessionProvider.notifier).state = session
+              .copyWith(
+                kycReference: verification.kycReference,
+                bvnVerified: verification.bvnVerified,
+              );
+          if (!context.mounted) return;
+          await showIdVerificationPopup(
+            context,
+            enteredNumber: enteredNumber,
+            formattedNumber: _formatIdNumber(enteredNumber),
+            idType: 'BVN',
+            onConfirm: () => context.push(Routes.identityVerification),
+          );
+        } catch (error) {
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
+        }
       },
     );
   }
