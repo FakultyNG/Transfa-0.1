@@ -52,7 +52,17 @@ class AuthRepository {
   Future<OtpChallenge> resendOtp({
     required String phoneNumber,
     required String otpReference,
-  }) => _api.resendOtp(phoneNumber: phoneNumber, otpReference: otpReference);
+  }) async {
+    try {
+      return await _api.resendOtp(
+        phoneNumber: phoneNumber,
+        otpReference: otpReference,
+      );
+    } on ApiException catch (error) {
+      if (error.code != 'OTP_EXPIRED') rethrow;
+      return _api.sendOtp(phoneNumber);
+    }
+  }
 
   Future<bool> verifyOtp({
     required String phoneNumber,
