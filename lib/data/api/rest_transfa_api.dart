@@ -716,6 +716,11 @@ class RestTransfaApi implements TransfaApi {
       _authenticate('$_api/auth/biometric/login', {'deviceId': deviceId});
 
   @override
+  Future<CashDropConfig> getCashDropConfig() async => CashDropConfig.fromJson(
+    _dataMap(await _client.get('$_api/cash-drop/config')),
+  );
+
+  @override
   Future<CashDropStatus> getCashDropStatus() async => CashDropStatus.fromJson(
     _dataMap(await _client.get('$_api/cash-drop/status')),
   );

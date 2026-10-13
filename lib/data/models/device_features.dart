@@ -13,21 +13,41 @@ class BiometricStatus {
   final String? deviceId;
 }
 
+class CashDropConfig {
+  const CashDropConfig({
+    required this.featureEnabled,
+    required this.kycSelfieRequired,
+  });
+
+  factory CashDropConfig.fromJson(Map<String, dynamic> json) => CashDropConfig(
+    featureEnabled: json['featureEnabled'] == true,
+    kycSelfieRequired: json['kycSelfieRequired'] == true,
+  );
+
+  final bool featureEnabled;
+  final bool kycSelfieRequired;
+}
+
 class CashDropStatus {
   const CashDropStatus({
     required this.enabled,
     required this.status,
+    this.featureEnabled = true,
     this.id,
     this.profileImageUrl,
   });
 
   factory CashDropStatus.fromJson(Map<String, dynamic> json) => CashDropStatus(
-    enabled: json['enabled'] == true || json['status'] == 'active',
+    featureEnabled: json['featureEnabled'] != false,
+    enabled:
+        json['featureEnabled'] != false &&
+        (json['enabled'] == true || json['status'] == 'active'),
     status: (json['status'] ?? 'disabled').toString(),
     id: (json['CashDropId'] ?? json['cashDropId'])?.toString(),
     profileImageUrl: json['profileImageUrl']?.toString(),
   );
 
+  final bool featureEnabled;
   final bool enabled;
   final String status;
   final String? id;

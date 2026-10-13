@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 import 'dart:ui' show ImageFilter;
+
 import '../../../core/constants/assets.dart';
 import '../../../shared/widgets/pill_button.dart';
 import '../../../core/router/routes.dart';
@@ -578,12 +580,20 @@ class AddBvnScreen extends ConsumerWidget {
                 bvnVerified: verification.bvnVerified,
               );
           if (!context.mounted) return;
+          final cashDropConfig = await ref
+              .read(deviceFeaturesRepositoryProvider)
+              .cashDropConfig();
+          if (!context.mounted) return;
           await showIdVerificationPopup(
             context,
             enteredNumber: enteredNumber,
             formattedNumber: _formatIdNumber(enteredNumber),
             idType: 'BVN',
-            onConfirm: () => context.push(Routes.identityVerification),
+            onConfirm: () => context.push(
+              cashDropConfig.kycSelfieRequired
+                  ? Routes.identityVerification
+                  : Routes.createPin,
+            ),
           );
         } catch (error) {
           if (!context.mounted) return;

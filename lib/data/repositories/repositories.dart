@@ -448,6 +448,7 @@ class DeviceFeaturesRepository {
       _api.disableBiometric(deviceId);
   Future<AppUser> biometricLogin(String deviceId) =>
       _api.biometricLogin(deviceId);
+  Future<CashDropConfig> cashDropConfig() => _api.getCashDropConfig();
   Future<CashDropStatus> cashDropStatus() => _api.getCashDropStatus();
   Future<CashDropStatus> registerCashDrop() => _api.registerCashDrop();
   Future<CashDropStatus> disableCashDrop() =>
@@ -464,4 +465,7 @@ final biometricStatusProvider = FutureProvider<BiometricStatus>(
 );
 final cashDropStatusProvider = FutureProvider<CashDropStatus>(
   (ref) => ref.watch(deviceFeaturesRepositoryProvider).cashDropStatus(),
+);
+final cashDropConfigProvider = FutureProvider<CashDropConfig>(
+  (ref) => ref.watch(deviceFeaturesRepositoryProvider).cashDropConfig(),
 );

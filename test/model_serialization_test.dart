@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:transfa/core/config/app_config.dart';
 import 'package:transfa/data/api/api_exception.dart';
 import 'package:transfa/data/models/bank.dart';
+import 'package:transfa/data/models/device_features.dart';
 import 'package:transfa/data/models/gift_card.dart';
 import 'package:transfa/data/models/support.dart';
 import 'package:transfa/data/models/transaction.dart';
@@ -177,6 +178,28 @@ void main() {
 
       expect(ticket.messages, hasLength(1));
       expect(ticket.messages.single.attachmentUrls, hasLength(1));
+    });
+
+    test('parses CashDrop feature config', () {
+      final config = CashDropConfig.fromJson({
+        'featureEnabled': false,
+        'kycSelfieRequired': false,
+      });
+
+      expect(config.featureEnabled, isFalse);
+      expect(config.kycSelfieRequired, isFalse);
+    });
+
+    test('disabled CashDrop config forces status off', () {
+      final status = CashDropStatus.fromJson({
+        'featureEnabled': false,
+        'enabled': true,
+        'status': 'active',
+      });
+
+      expect(status.featureEnabled, isFalse);
+      expect(status.enabled, isFalse);
+      expect(status.status, 'active');
     });
   });
 

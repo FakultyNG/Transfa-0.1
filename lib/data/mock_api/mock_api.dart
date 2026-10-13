@@ -537,10 +537,16 @@ class MockApi implements TransfaApi {
       _delay(MockData.currentUser);
 
   @override
+  Future<CashDropConfig> getCashDropConfig() => _delay(
+    const CashDropConfig(featureEnabled: false, kycSelfieRequired: false),
+  );
+
+  @override
   Future<CashDropStatus> getCashDropStatus() => _delay(
     CashDropStatus(
+      featureEnabled: false,
       enabled: _cashDropEnabled,
-      status: _cashDropEnabled ? 'active' : 'disabled',
+      status: _cashDropEnabled ? 'active' : 'disabled_by_config',
       id: 'cashdrop_mock',
     ),
   );

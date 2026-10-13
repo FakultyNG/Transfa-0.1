@@ -158,6 +158,7 @@ abstract interface class TransfaApi {
   Future<void> disableBiometric(String deviceId);
   Future<AppUser> biometricLogin(String deviceId);
 
+  Future<CashDropConfig> getCashDropConfig();
   Future<CashDropStatus> getCashDropStatus();
   Future<CashDropStatus> registerCashDrop();
   Future<CashDropStatus> disableCashDrop(String reason);
