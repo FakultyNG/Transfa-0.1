@@ -25,31 +25,43 @@ class AddMoneyScreen extends ConsumerWidget {
       data: (d) => d.accountNumber,
       orElse: () => '—',
     );
+    final bankName = dva.maybeWhen(
+      data: (d) => d.bankName,
+      orElse: () => 'Bank',
+    );
 
     return WallpaperScaffold(
       darken: 0.55,
       blur: true,
-      body: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
-        child: Column(
-          children: [
-            const Spacer(flex: 2),
-            const _IntroWidget(),
-            const SizedBox(height: 22),
-            _ShareWidget(
-              account: account.replaceAllMapped(
-                RegExp(r'(\d{3})(\d{3})(\d{4})'),
-                (m) => '${m[1]} ${m[2]} ${m[3]}',
-              ),
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              key: const Key('add-money-background'),
+              behavior: HitTestBehavior.opaque,
+              onTap: () => context.go(Routes.walletWidget),
             ),
-            const Spacer(flex: 3),
-            const Spacer(flex: 1),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [],
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+            child: Column(
+              children: [
+                const Spacer(flex: 2),
+                const _IntroWidget(),
+                const SizedBox(height: 22),
+                _ShareWidget(
+                  account: account.replaceAllMapped(
+                    RegExp(r'(\d{3})(\d{3})(\d{4})'),
+                    (m) => '${m[1]} ${m[2]} ${m[3]}',
+                  ),
+                  bankName: bankName,
+                ),
+                const Spacer(flex: 3),
+                const Spacer(flex: 1),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -163,7 +175,8 @@ class _IntroWidget extends StatelessWidget {
 
 class _ShareWidget extends StatefulWidget {
   final String account;
-  const _ShareWidget({required this.account});
+  final String bankName;
+  const _ShareWidget({required this.account, required this.bankName});
 
   @override
   State<_ShareWidget> createState() => _ShareWidgetState();
@@ -247,7 +260,7 @@ class _ShareWidgetState extends State<_ShareWidget> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'TRANSFA',
+              widget.bankName,
               style: AppTypography.caption.copyWith(
                 color: Colors.white.withOpacity(0.55),
                 fontSize: 16,

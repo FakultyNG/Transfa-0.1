@@ -1,11 +1,11 @@
 import 'dart:convert';
 import 'dart:ui';
 
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
 
 import '../../core/constants/assets.dart';
 import '../../core/router/routes.dart';
@@ -13,6 +13,8 @@ import '../../core/utils/error_messages.dart';
 import '../../data/models/transaction.dart';
 import '../../data/repositories/repositories.dart';
 import '../transfers/presentation/transfer_state.dart';
+
+enum _CashDropMode { receive, pay }
 
 class CashDropScreen extends ConsumerStatefulWidget {
   const CashDropScreen({super.key});
@@ -37,11 +39,70 @@ class _CashDropScreenState extends ConsumerState<CashDropScreen>
   ).animate(CurvedAnimation(parent: _slideController, curve: Curves.easeOut));
 
   bool _loading = false;
+  bool _initializingCamera = false;
+  _CashDropMode _mode = _CashDropMode.receive;
+  CameraController? _cameraController;
 
   @override
   void dispose() {
+    _cameraController?.dispose();
     _slideController.dispose();
     super.dispose();
+  }
+
+  Future<void> _startCamera() async {
+    if (_cameraController?.value.isInitialized == true || _initializingCamera) {
+      return;
+    }
+    setState(() => _initializingCamera = true);
+    try {
+      final cameras = await availableCameras();
+      if (cameras.isEmpty) {
+        throw StateError('No camera is available on this device.');
+      }
+      final selected = cameras.where(
+        (camera) => camera.lensDirection == CameraLensDirection.back,
+      );
+      final controller = CameraController(
+        selected.isNotEmpty ? selected.first : cameras.first,
+        ResolutionPreset.high,
+        enableAudio: false,
+        imageFormatGroup: ImageFormatGroup.jpeg,
+      );
+      await controller.initialize();
+      if (!mounted || _mode != _CashDropMode.pay) {
+        await controller.dispose();
+        return;
+      }
+      setState(() => _cameraController = controller);
+    } catch (error) {
+      _message(userFacingError(error));
+    } finally {
+      if (mounted) setState(() => _initializingCamera = false);
+    }
+  }
+
+  Future<void> _stopCamera() async {
+    final controller = _cameraController;
+    _cameraController = null;
+    if (mounted) setState(() {});
+    await controller?.dispose();
+  }
+
+  Future<void> _selectReceive() async {
+    if (_mode != _CashDropMode.receive) {
+      setState(() => _mode = _CashDropMode.receive);
+    }
+    await _stopCamera();
+    final status = ref.read(cashDropStatusProvider).valueOrNull;
+    if (status?.enabled != true) await _setEnabled(true);
+  }
+
+  Future<void> _selectPay() async {
+    if (_mode != _CashDropMode.pay) {
+      setState(() => _mode = _CashDropMode.pay);
+    }
+    await _startCamera();
   }
 
   Future<void> _setEnabled(bool enabled) async {
@@ -72,14 +133,18 @@ class _CashDropScreenState extends ConsumerState<CashDropScreen>
       _message('CashDrop is not available yet.');
       return;
     }
-    final image = await ImagePicker().pickImage(
-      source: ImageSource.camera,
-      imageQuality: 88,
-      maxWidth: 1600,
-    );
-    if (image == null) return;
+    if (_mode != _CashDropMode.pay) {
+      await _selectPay();
+      return;
+    }
+    final controller = _cameraController;
+    if (controller == null || !controller.value.isInitialized) {
+      await _startCamera();
+      return;
+    }
     setState(() => _loading = true);
     try {
+      final image = await controller.takePicture();
       final bytes = await image.readAsBytes();
       final match = await ref
           .read(deviceFeaturesRepositoryProvider)
@@ -126,9 +191,7 @@ class _CashDropScreenState extends ConsumerState<CashDropScreen>
     final config = ref.watch(cashDropConfigProvider);
     final status = ref.watch(cashDropStatusProvider);
     final user = ref.watch(currentUserProvider);
-    final featureEnabled = config.asData?.value.featureEnabled ?? false;
     final cashDrop = status.asData?.value;
-    final receiving = cashDrop?.enabled ?? false;
     final profileUrl = cashDrop?.profileImageUrl ?? user?.avatarUrl;
     final error = config.hasError
         ? userFacingError(config.error!)
@@ -194,31 +257,50 @@ class _CashDropScreenState extends ConsumerState<CashDropScreen>
                                   ),
                                 ),
                                 const SizedBox(height: 30),
-                                _CashDropFace(profileUrl: profileUrl),
+                                GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onTap: _mode == _CashDropMode.pay && !_loading
+                                      ? _scan
+                                      : null,
+                                  child: _CashDropFace(
+                                    profileUrl: profileUrl,
+                                    cameraController: _mode == _CashDropMode.pay
+                                        ? _cameraController
+                                        : null,
+                                    cameraLoading:
+                                        _mode == _CashDropMode.pay &&
+                                        _initializingCamera,
+                                  ),
+                                ),
                                 const SizedBox(height: 20),
                                 Text(
-                                  user?.fullName.isNotEmpty == true
-                                      ? user!.fullName.split(' ').first
-                                      : 'Transfa',
+                                  'Transfa',
                                   style: const TextStyle(
                                     fontFamily: 'Arial Rounded MT Bold',
                                     fontSize: 30,
                                     color: Colors.white,
                                   ),
                                 ),
-                                const SizedBox(height: 28),
-                                Text(
-                                  error ??
-                                      (receiving
-                                          ? 'To receive, another Transfa user scans your face.'
-                                          : 'Enable receiving or scan another Transfa user to pay.'),
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    height: 1.4,
-                                    color: error == null
-                                        ? Colors.white.withValues(alpha: 0.65)
-                                        : const Color(0xFFFF9F9F),
+                                const SizedBox(height: 40),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 30,
+                                  ),
+                                  child: Text(
+                                    error ??
+                                        (_mode == _CashDropMode.receive
+                                            ? 'To receive, scan your face with another Transfa'
+                                            : 'To pay, try holding this Transfa over another Transfa'),
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontFamily: 'Roboto',
+                                      fontSize: 17,
+                                      height: 1.5,
+                                      letterSpacing: 0.02,
+                                      color: error == null
+                                          ? Colors.white.withValues(alpha: 0.5)
+                                          : const Color(0xFFFF9F9F),
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(height: 22),
@@ -263,11 +345,10 @@ class _CashDropScreenState extends ConsumerState<CashDropScreen>
                                       child: Row(
                                         children: [
                                           _CashDropControl(
-                                            active: receiving,
-                                            enabled:
-                                                featureEnabled && !_loading,
-                                            onTap: () =>
-                                                _setEnabled(!receiving),
+                                            active:
+                                                _mode == _CashDropMode.receive,
+                                            enabled: !_loading,
+                                            onTap: _selectReceive,
                                             child: SvgPicture.asset(
                                               Assets.receive,
                                               width: 16,
@@ -275,10 +356,11 @@ class _CashDropScreenState extends ConsumerState<CashDropScreen>
                                             ),
                                           ),
                                           _CashDropControl(
-                                            active: false,
-                                            enabled:
-                                                featureEnabled && !_loading,
-                                            onTap: _scan,
+                                            active: _mode == _CashDropMode.pay,
+                                            enabled: !_loading,
+                                            onTap: _mode == _CashDropMode.pay
+                                                ? _scan
+                                                : _selectPay,
                                             child: SvgPicture.asset(
                                               Assets.cashDrop,
                                               width: 26,
@@ -316,9 +398,15 @@ class _CashDropScreenState extends ConsumerState<CashDropScreen>
 }
 
 class _CashDropFace extends StatelessWidget {
-  const _CashDropFace({this.profileUrl});
+  const _CashDropFace({
+    this.profileUrl,
+    this.cameraController,
+    this.cameraLoading = false,
+  });
 
   final String? profileUrl;
+  final CameraController? cameraController;
+  final bool cameraLoading;
 
   @override
   Widget build(BuildContext context) {
@@ -339,7 +427,13 @@ class _CashDropFace extends StatelessWidget {
                   colors: [Color(0xFF00BCF6), Color(0xFF006EFF)],
                 ),
               ),
-              child: profileUrl == null || profileUrl!.isEmpty
+              child: cameraController?.value.isInitialized == true
+                  ? _CashDropCameraPreview(controller: cameraController!)
+                  : cameraLoading
+                  ? const Center(
+                      child: CircularProgressIndicator(color: Colors.white),
+                    )
+                  : profileUrl == null || profileUrl!.isEmpty
                   ? const Icon(
                       Icons.person_rounded,
                       color: Colors.white,
@@ -377,6 +471,27 @@ class _CashDropFace extends StatelessWidget {
             child: SvgPicture.asset(Assets.redBubble, width: 195, height: 195),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _CashDropCameraPreview extends StatelessWidget {
+  const _CashDropCameraPreview({required this.controller});
+
+  final CameraController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final previewSize = controller.value.previewSize;
+    if (previewSize == null) return const SizedBox.shrink();
+
+    return FittedBox(
+      fit: BoxFit.cover,
+      child: SizedBox(
+        width: previewSize.height,
+        height: previewSize.width,
+        child: CameraPreview(controller),
       ),
     );
   }

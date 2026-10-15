@@ -42,6 +42,10 @@ the explicit retry route after the initial challenge.
 - Home balance and transaction history come from `/wallet` and `/transactions`.
 - Add Money calls `POST /wallet/dva/create` and displays the returned bank and
   account number with the live wallet balance.
+- The app continues to send `preferredBank: "auto"`. The backend maps this to
+  Strowallet's default live virtual-account route; bank-specific provider paths,
+  credentials, customer-email fallback, and webhook configuration remain
+  server-only concerns.
 - The Naira keypad carries its entered amount into bank selection/account
   resolution, then uses `/transfers/ngn/quote` for the server-owned fee and
   total. `NGN_TRANSFER_FIXED_FEE` is the backend fallback when no database

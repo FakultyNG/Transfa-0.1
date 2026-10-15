@@ -665,93 +665,107 @@ class _KeypadView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SafeArea(
-    child: Padding(
-      padding: const EdgeInsets.fromLTRB(20, 50, 20, 110),
-      child: Column(
-        children: [
-          Align(
-            alignment: Alignment.centerRight,
-            child: GestureDetector(
-              onTap: onPickCurrency,
-              child: Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.08),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxHeight < 720;
+        final actionSize = compact ? 64.0 : 78.0;
+
+        return Padding(
+          padding: EdgeInsets.fromLTRB(20, compact ? 16 : 32, 20, 104),
+          child: Column(
+            children: [
+              Align(
+                alignment: Alignment.centerRight,
+                child: GestureDetector(
+                  onTap: onPickCurrency,
+                  child: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.08),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
-                  ],
+                    alignment: Alignment.center,
+                    child: currency == AmountCurrency.usd
+                        ? SvgPicture.asset(
+                            Assets.spendCurrency,
+                            width: 40,
+                            height: 40,
+                            fit: BoxFit.contain,
+                          )
+                        : currency == AmountCurrency.ngn
+                        ? SvgPicture.asset(
+                            Assets.Nigerian_Flag,
+                            width: 20,
+                            height: 20,
+                            fit: BoxFit.contain,
+                          )
+                        : SvgPicture.asset(
+                            Assets.China_Flag,
+                            width: 20,
+                            height: 20,
+                            fit: BoxFit.contain,
+                          ),
+                  ),
                 ),
-                alignment: Alignment.center,
-                child: currency == AmountCurrency.usd
-                    ? SvgPicture.asset(
-                        Assets.spendCurrency,
-                        width: 40,
-                        height: 40,
-                        fit: BoxFit.contain,
-                      )
-                    : currency == AmountCurrency.ngn
-                    ? SvgPicture.asset(
-                        Assets.Nigerian_Flag,
-                        width: 20,
-                        height: 20,
-                        fit: BoxFit.contain,
-                      )
-                    : SvgPicture.asset(
-                        Assets.China_Flag,
-                        width: 20,
-                        height: 20,
-                        fit: BoxFit.contain,
-                      ),
               ),
-            ),
-          ),
-          const SizedBox(height: 50),
-          RichText(
-            text: TextSpan(
-              style: AppTypography.displayLarge.copyWith(
-                fontSize: 40,
-                fontWeight: FontWeight.w800,
-                color: Colors.black,
-                height: 1.0,
+              SizedBox(height: compact ? 12 : 24),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: RichText(
+                  text: TextSpan(
+                    style: AppTypography.displayLarge.copyWith(
+                      fontSize: 40,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.black,
+                      height: 1.0,
+                    ),
+                    children: [
+                      TextSpan(text: currency.symbol),
+                      TextSpan(text: formatted),
+                    ],
+                  ),
+                ),
               ),
-              children: [
-                TextSpan(text: currency.symbol),
-                TextSpan(text: formatted),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Enter Amount',
-            style: AppTypography.subheading.copyWith(
-              color: AppColors.textMuted,
-              fontSize: 20,
-              fontWeight: FontWeight.w400,
-            ),
-          ),
-          Expanded(
-            child: _Keypad(onTap: onTap, onBack: onBack),
-          ),
-          GestureDetector(
-            onTap: onSend,
-            child: Container(
-              child: SvgPicture.asset(
-                Assets.sendIcon,
-                width: 78,
-                height: 78,
-                fit: BoxFit.contain,
+              const SizedBox(height: 8),
+              Text(
+                'Enter Amount',
+                style: AppTypography.subheading.copyWith(
+                  color: AppColors.textMuted,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w400,
+                ),
               ),
-            ),
+              Expanded(
+                child: _Keypad(onTap: onTap, onBack: onBack),
+              ),
+              Semantics(
+                button: true,
+                label: 'Send money',
+                child: GestureDetector(
+                  key: const Key('send-money-submit'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onSend,
+                  child: SvgPicture.asset(
+                    Assets.sendIcon,
+                    width: actionSize,
+                    height: actionSize,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+              SizedBox(height: compact ? 4 : 12),
+            ],
           ),
-          const SizedBox(height: 20),
-        ],
-      ),
+        );
+      },
     ),
   );
 }
@@ -761,11 +775,11 @@ class _Keypad extends StatelessWidget {
   final VoidCallback onBack;
   const _Keypad({required this.onTap, required this.onBack});
 
-  Widget _circle(String d) => GestureDetector(
+  Widget _circle(String d, double size) => GestureDetector(
     onTap: () => onTap(d),
     child: Container(
-      width: 78,
-      height: 78,
+      width: size,
+      height: size,
       decoration: BoxDecoration(
         color: Colors.white,
         shape: BoxShape.circle,
@@ -780,34 +794,37 @@ class _Keypad extends StatelessWidget {
       alignment: Alignment.center,
       child: Text(
         d,
-        style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w400),
+        style: TextStyle(
+          fontSize: (size * 0.46).clamp(24.0, 36.0),
+          fontWeight: FontWeight.w400,
+        ),
       ),
     ),
   );
-  Widget _dot() => GestureDetector(
+  Widget _dot(double size) => GestureDetector(
     onTap: () => onTap('.'),
     child: Container(
-      width: 78,
-      height: 78,
+      width: size,
+      height: size,
       alignment: Alignment.center,
       child: const Icon(Icons.circle, size: 10, color: Colors.black),
     ),
   );
-  Widget _delete() => GestureDetector(
-    onTap: onBack,
-    child: Container(
-      width: 78,
-      height: 78,
-      alignment: Alignment.center,
+  Widget _delete(double size) => Semantics(
+    button: true,
+    label: 'Delete amount digit',
+    child: GestureDetector(
+      key: const Key('send-money-delete'),
+      behavior: HitTestBehavior.opaque,
+      onTap: onBack,
       child: Container(
-        width: 78,
-        height: 78,
-
+        width: size,
+        height: size,
         alignment: Alignment.center,
         child: SvgPicture.asset(
           Assets.deleteIcon,
-          width: 32,
-          height: 26,
+          width: (size * 0.41).clamp(26.0, 32.0),
+          height: (size / 3).clamp(21.0, 26.0),
           fit: BoxFit.contain,
         ),
       ),
@@ -816,21 +833,25 @@ class _Keypad extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget row(List<Widget> cells) => Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: cells,
-      ),
-    );
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        row([_circle('1'), _circle('2'), _circle('3')]),
-        row([_circle('4'), _circle('5'), _circle('6')]),
-        row([_circle('7'), _circle('8'), _circle('9')]),
-        row([_dot(), _circle('0'), _delete()]),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final size = (constraints.maxHeight / 4 - 6).clamp(40.0, 78.0);
+        Widget row(List<Widget> cells) => Expanded(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: cells,
+          ),
+        );
+
+        return Column(
+          children: [
+            row([_circle('1', size), _circle('2', size), _circle('3', size)]),
+            row([_circle('4', size), _circle('5', size), _circle('6', size)]),
+            row([_circle('7', size), _circle('8', size), _circle('9', size)]),
+            row([_dot(size), _circle('0', size), _delete(size)]),
+          ],
+        );
+      },
     );
   }
 }

@@ -129,7 +129,6 @@ class WalletWidgetScreen extends StatelessWidget {
                 _AppIcon(
                   asset: Assets.reeplayIcon,
                   label: 'Reeplay',
-                  comingSoon: true,
                   onTap: () {},
                 ),
               ],
@@ -155,13 +154,11 @@ class _AppIcon extends StatelessWidget {
   final String asset;
   final String label;
   final VoidCallback onTap;
-  final bool comingSoon;
 
   const _AppIcon({
     required this.asset,
     required this.label,
     required this.onTap,
-    this.comingSoon = false,
   });
 
   @override
@@ -183,40 +180,20 @@ class _AppIcon extends StatelessWidget {
             child: Image.asset(asset, fit: BoxFit.contain),
           );
     return GestureDetector(
-      onTap: comingSoon ? null : onTap,
+      onTap: onTap,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (comingSoon)
-            Opacity(
-              opacity: 0.45,
-              child: ColorFiltered(
-                colorFilter: const ColorFilter.mode(
-                  Colors.grey,
-                  BlendMode.saturation,
-                ),
-                child: icon,
-              ),
-            )
-          else
-            icon,
+          icon,
           const SizedBox(height: 6),
           Text(
             label,
             style: AppTypography.body.copyWith(
-              color: comingSoon ? Colors.white54 : Colors.white,
+              color: Colors.white,
               fontSize: 14,
               fontWeight: FontWeight.w500,
             ),
           ),
-          if (comingSoon)
-            Text(
-              'Coming soon',
-              style: AppTypography.caption.copyWith(
-                color: Colors.white38,
-                fontSize: 10,
-              ),
-            ),
         ],
       ),
     );
