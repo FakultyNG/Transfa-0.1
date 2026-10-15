@@ -52,7 +52,7 @@ When `kycSelfieRequired=true`, behavior is selected by `kycSelfieMode` from the
 feature config. `static` sends the captured image to the existing selfie
 endpoint. `bytid_liveness` captures and retains a front-camera profile image,
 starts `/kyc/bvn/liveness/start`, opens the returned hosted URL, handles the
-`transfa://kyc/liveness-complete` callback, polls
+`transfa://kyc/liveness-complete` callback inside a full-screen in-app WebView, polls
 `/kyc/bvn/liveness/status`, and calls `/kyc/bvn/liveness/complete` only after
 the session is usable. The profile image is for the customer profile and
 CashDrop only; BytID uses `liveness_session_id` to match against the stored BVN.

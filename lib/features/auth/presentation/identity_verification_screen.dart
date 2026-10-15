@@ -8,7 +8,6 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image/image.dart' as image_lib;
-import 'package:url_launcher/url_launcher.dart';
 import 'dart:io';
 import 'dart:async';
 
@@ -20,6 +19,7 @@ import '../../../data/repositories/repositories.dart';
 import '../../pop-ups/faceShot/failedPopup.dart';
 import '../../pop-ups/faceShot/faceShotPopup.dart';
 import '../../pop-ups/faceShot/successPopup.dart';
+import 'bytid_liveness_screen.dart';
 
 List<CameraDescription>? cameras;
 
@@ -174,17 +174,29 @@ class _IdentityVerificationScreenState
             kycReference: session.kycReference!,
           );
       _livenessSessionId = liveness.id;
-      final launched = await launchUrl(
-        Uri.parse(liveness.url),
-        mode: LaunchMode.externalApplication,
+      if (!mounted) return;
+      final result = await Navigator.of(context).push<LivenessWebResult>(
+        MaterialPageRoute(
+          fullscreenDialog: true,
+          builder: (_) => BytidLivenessScreen(
+            sessionUrl: liveness.url,
+            sessionId: liveness.id,
+          ),
+        ),
       );
-      if (!launched) {
-        throw StateError('Could not open the secure BytID face check.');
+      if (!mounted) return;
+      if (result == null) {
+        setState(() {
+          _isVerifying = false;
+          _livenessStarted = false;
+        });
+        return;
       }
       _livenessPollTimer?.cancel();
       _livenessPollTimer = Timer.periodic(const Duration(seconds: 4), (_) {
         _completeLiveness();
       });
+      await _completeLiveness();
     } catch (error) {
       if (!mounted) return;
       setState(() {
