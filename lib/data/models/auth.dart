@@ -67,14 +67,49 @@ class BvnVerification {
   const BvnVerification({
     required this.kycReference,
     required this.bvnVerified,
+    this.bvnMasked,
+    this.firstName,
+    this.middleName,
+    this.lastName,
+    this.country,
+    this.dateOfBirth,
   });
 
   factory BvnVerification.fromJson(Map<String, dynamic> json) =>
       BvnVerification(
         kycReference: json['kycReference'].toString(),
         bvnVerified: json['bvnVerified'] == true,
+        bvnMasked: _stringValue(json, 'bvnMasked', 'bvn_masked'),
+        firstName: _stringValue(json, 'firstName', 'first_name'),
+        middleName: _stringValue(json, 'middleName', 'middle_name'),
+        lastName: _stringValue(json, 'lastName', 'last_name'),
+        country: _stringValue(json, 'country', 'nationality'),
+        dateOfBirth: _stringValue(json, 'dateOfBirth', 'date_of_birth'),
       );
 
   final String kycReference;
   final bool bvnVerified;
+  final String? bvnMasked;
+  final String? firstName;
+  final String? middleName;
+  final String? lastName;
+  final String? country;
+  final String? dateOfBirth;
+
+  String get fullName => [firstName, middleName, lastName]
+      .whereType<String>()
+      .map((part) => part.trim())
+      .where((part) => part.isNotEmpty)
+      .join(' ');
+
+  static String? _stringValue(
+    Map<String, dynamic> json,
+    String camelCaseKey,
+    String alternateKey,
+  ) {
+    final value = json[camelCaseKey] ?? json[alternateKey];
+    if (value == null) return null;
+    final text = value.toString().trim();
+    return text.isEmpty ? null : text;
+  }
 }

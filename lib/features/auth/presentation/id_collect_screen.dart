@@ -12,6 +12,7 @@ import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/error_messages.dart';
+import '../../../data/models/auth.dart';
 import '../../../data/repositories/repositories.dart';
 import '../../../shared/widgets/glass_card.dart';
 import '../../../features/pop-ups/transfaBankPrivacy_popup.dart';
@@ -51,7 +52,7 @@ class _IdCollectScreenState extends State<IdCollectScreen> {
     showDialog(
       context: context,
       barrierDismissible: true,
-      barrierColor: Colors.black.withOpacity(0.5),
+      barrierColor: Colors.black.withValues(alpha: 0.5),
       builder: (context) => TransfaBankPrivacyPopup(),
     );
   }
@@ -358,17 +359,19 @@ Future<void> showIdVerificationPopup(
   required VoidCallback onConfirm,
   required String idType,
   required String formattedNumber,
+  BvnVerification? verification,
 }) {
   return showGeneralDialog(
     context: context,
     barrierDismissible: true,
     barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
     transitionDuration: const Duration(milliseconds: 400),
-    pageBuilder: (_, __, ___) => _IdVerificationModalContent(
+    pageBuilder: (_, _, _) => _IdVerificationModalContent(
       enteredNumber: enteredNumber,
       onConfirm: onConfirm,
       idType: idType,
       formattedNumber: formattedNumber,
+      verification: verification,
     ),
     transitionBuilder: (context, animation, secondaryAnimation, child) {
       const begin = Offset(0, 1);
@@ -395,12 +398,14 @@ class _IdVerificationModalContent extends StatelessWidget {
   final VoidCallback onConfirm;
   final String idType;
   final String formattedNumber;
+  final BvnVerification? verification;
 
   const _IdVerificationModalContent({
     required this.enteredNumber,
     required this.onConfirm,
     required this.idType,
     required this.formattedNumber,
+    this.verification,
   });
 
   @override
@@ -459,7 +464,9 @@ class _IdVerificationModalContent extends StatelessWidget {
                         ),
                         const SizedBox(height: 10.0),
                         Text(
-                          'Barry Bontulipo',
+                          verification?.fullName.isNotEmpty == true
+                              ? verification!.fullName
+                              : 'Name not provided',
                           style: AppTypography.displayMedium.copyWith(
                             fontWeight: FontWeight.w800,
                             fontSize: 28,
@@ -483,16 +490,23 @@ class _IdVerificationModalContent extends StatelessWidget {
                           ),
                           child: Row(
                             children: [
-                              SvgPicture.asset(
-                                Assets.Nigerian_Flag,
-                                width: 24,
-                                height: 24,
-                                fit: BoxFit.contain,
-                              ),
+                              if (_isNigerian(verification?.country))
+                                SvgPicture.asset(
+                                  Assets.Nigerian_Flag,
+                                  width: 24,
+                                  height: 24,
+                                  fit: BoxFit.contain,
+                                )
+                              else
+                                const Icon(
+                                  Icons.public,
+                                  size: 24,
+                                  color: Color(0xFF6B7A8A),
+                                ),
                               const SizedBox(width: 8),
-                              const Text(
-                                'Nigerian',
-                                style: TextStyle(
+                              Text(
+                                verification?.country ?? 'Country not provided',
+                                style: const TextStyle(
                                   fontSize: 17,
                                   fontWeight: FontWeight.w600,
                                   letterSpacing: 0.8,
@@ -506,6 +520,7 @@ class _IdVerificationModalContent extends StatelessWidget {
                         _StatusSummaryCard(
                           idNumber: formattedNumber,
                           idType: idType,
+                          dateOfBirth: verification?.dateOfBirth,
                         ),
                         const SizedBox(height: 20.0),
                         PillButton(
@@ -525,6 +540,13 @@ class _IdVerificationModalContent extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  bool _isNigerian(String? country) {
+    final normalized = country?.trim().toLowerCase();
+    return normalized == 'nigeria' ||
+        normalized == 'nigerian' ||
+        normalized == 'ng';
   }
 }
 
@@ -574,6 +596,11 @@ class AddBvnScreen extends ConsumerWidget {
                 registrationToken: session!.registrationToken!,
                 bvn: enteredNumber,
               );
+          if (!verification.bvnVerified || verification.fullName.isEmpty) {
+            throw StateError(
+              'BVN lookup did not return the required identity details.',
+            );
+          }
           ref.read(registrationSessionProvider.notifier).state = session
               .copyWith(
                 kycReference: verification.kycReference,
@@ -589,6 +616,7 @@ class AddBvnScreen extends ConsumerWidget {
             enteredNumber: enteredNumber,
             formattedNumber: _formatIdNumber(enteredNumber),
             idType: 'BVN',
+            verification: verification,
             onConfirm: () => context.push(
               cashDropConfig.kycSelfieRequired
                   ? Routes.identityVerification
@@ -701,8 +729,13 @@ class _SummaryRow extends StatelessWidget {
 class _StatusSummaryCard extends StatelessWidget {
   final String idNumber;
   final String idType;
+  final String? dateOfBirth;
 
-  const _StatusSummaryCard({required this.idNumber, required this.idType});
+  const _StatusSummaryCard({
+    required this.idNumber,
+    required this.idType,
+    this.dateOfBirth,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -718,9 +751,9 @@ class _StatusSummaryCard extends StatelessWidget {
             label: 'Born',
             icon: Assets.birthdayCake,
             labelBold: true,
-            value: const Text(
-              "Friday, December 10",
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w300),
+            value: Text(
+              _formatDate(dateOfBirth),
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w300),
             ),
           ),
           _SummaryRow(
@@ -735,5 +768,26 @@ class _StatusSummaryCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _formatDate(String? value) {
+    if (value == null || value.trim().isEmpty) return 'Not provided';
+    final parsed = DateTime.tryParse(value.trim());
+    if (parsed == null) return value.trim();
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    return '${parsed.day} ${months[parsed.month - 1]} ${parsed.year}';
   }
 }

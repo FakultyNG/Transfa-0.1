@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transfa/core/config/app_config.dart';
 import 'package:transfa/data/api/api_exception.dart';
+import 'package:transfa/data/models/auth.dart';
 import 'package:transfa/data/models/bank.dart';
 import 'package:transfa/data/models/device_features.dart';
 import 'package:transfa/data/models/gift_card.dart';
@@ -12,6 +13,24 @@ import 'package:transfa/data/models/wallet.dart';
 
 void main() {
   group('API model serialization', () {
+    test('parses BVN lookup identity details', () {
+      final verification = BvnVerification.fromJson({
+        'kycReference': 'kyc_123',
+        'bvnVerified': true,
+        'bvnMasked': '*******4321',
+        'firstName': 'Adaeze',
+        'middleName': 'Chiamaka',
+        'lastName': 'Okafor',
+        'country': 'Nigeria',
+        'dateOfBirth': '1993-06-14',
+      });
+
+      expect(verification.fullName, 'Adaeze Chiamaka Okafor');
+      expect(verification.country, 'Nigeria');
+      expect(verification.dateOfBirth, '1993-06-14');
+      expect(verification.bvnMasked, '*******4321');
+    });
+
     test('parses a user response', () {
       final user = AppUser.fromJson({
         'id': 'usr_1',
