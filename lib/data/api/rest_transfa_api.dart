@@ -475,7 +475,8 @@ class RestTransfaApi implements TransfaApi {
   @override
   Future<AppTransaction> confirmTransfer({
     required TransferQuote quote,
-    required String passcode,
+    String? passcode,
+    String? biometricDeviceId,
     required String recipientName,
     String? recipientAccount,
     String? bankName,
@@ -490,7 +491,8 @@ class RestTransfaApi implements TransfaApi {
             : '$_api/transfers/ngn/confirm',
         data: {
           'quoteId': quote.quoteId,
-          'passcode': passcode,
+          if (passcode != null) 'passcode': passcode,
+          if (biometricDeviceId != null) 'biometricDeviceId': biometricDeviceId,
           if (isForeign) 'purpose': 'supplier_payment',
           if (!isForeign) 'narration': memo ?? 'TF Transfer',
         },
@@ -504,6 +506,9 @@ class RestTransfaApi implements TransfaApi {
       'currency': data['currency'] ?? data['payoutCurrency'],
       'amount': data['amount'] ?? data['payoutAmount'],
       'ngnAmount': data['totalNgnDebit'] ?? data['amount'],
+      'fee': data['fee'] ?? quote.fee,
+      'totalDebit': data['totalDebit'] ?? data['totalNgnDebit'] ?? quote.total,
+      'reference': data['reference'],
       'counterpartyName': recipientName,
       'counterpartyAccount': recipientAccount,
       'bankName': bankName,
@@ -743,9 +748,14 @@ class RestTransfaApi implements TransfaApi {
   }
 
   @override
-  Future<BiometricStatus> getBiometricStatus() async =>
+  Future<BiometricStatus> getBiometricStatus(String deviceId) async =>
       BiometricStatus.fromJson(
-        _dataMap(await _client.get('$_api/auth/biometric/status')),
+        _dataMap(
+          await _client.get(
+            '$_api/auth/biometric/status',
+            queryParameters: {'deviceId': deviceId},
+          ),
+        ),
       );
 
   @override

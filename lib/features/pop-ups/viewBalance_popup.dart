@@ -1,19 +1,24 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../../core/constants/assets.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../data/models/user.dart';
+import '../../../data/models/wallet.dart';
 
 class ViewBalancePopup extends StatefulWidget {
-  final dynamic user;
+  final AppUser? user;
   final num balance;
+  final DedicatedVirtualAccount dva;
   final VoidCallback onShareTap;
   final VoidCallback onCashDropTap;
 
   const ViewBalancePopup({
     required this.user,
     required this.balance,
+    required this.dva,
     required this.onShareTap,
     required this.onCashDropTap,
   });
@@ -136,10 +141,29 @@ class _ViewBalancePopupState extends State<ViewBalancePopup>
                                             child: ClipRRect(
                                               borderRadius:
                                                   BorderRadius.circular(35),
-                                              child: Image.asset(
-                                                Assets.coperateMan,
-                                                fit: BoxFit.cover,
-                                              ),
+                                              child:
+                                                  widget.user?.avatarUrl ==
+                                                          null ||
+                                                      widget
+                                                          .user!
+                                                          .avatarUrl!
+                                                          .isEmpty
+                                                  ? const Icon(
+                                                      Icons.person_rounded,
+                                                      color: Colors.white,
+                                                      size: 34,
+                                                    )
+                                                  : Image.network(
+                                                      widget.user!.avatarUrl!,
+                                                      fit: BoxFit.cover,
+                                                      errorBuilder: (_, _, _) =>
+                                                          const Icon(
+                                                            Icons
+                                                                .person_rounded,
+                                                            color: Colors.white,
+                                                            size: 34,
+                                                          ),
+                                                    ),
                                             ),
                                           ),
                                           const SizedBox(width: 20),
@@ -293,8 +317,8 @@ class _ViewBalancePopupState extends State<ViewBalancePopup>
                                                 crossAxisAlignment:
                                                     CrossAxisAlignment.start,
                                                 children: [
-                                                  const Text(
-                                                    'Transfa',
+                                                  Text(
+                                                    widget.dva.bankName,
                                                     style: TextStyle(
                                                       fontFamily: 'Roboto',
                                                       fontWeight:
@@ -309,8 +333,8 @@ class _ViewBalancePopupState extends State<ViewBalancePopup>
                                                       ),
                                                     ),
                                                   ),
-                                                  const Text(
-                                                    '703 208 4888',
+                                                  Text(
+                                                    widget.dva.accountNumber,
                                                     style: TextStyle(
                                                       fontFamily: 'Roboto',
                                                       fontWeight:
@@ -337,41 +361,64 @@ class _ViewBalancePopupState extends State<ViewBalancePopup>
                                             MainAxisAlignment.spaceBetween,
                                         children: [
                                           // Copy
-                                          Column(
-                                            children: [
-                                              Container(
-                                                width: 40,
-                                                height: 40,
-                                                decoration: BoxDecoration(
-                                                  color: Colors.white
-                                                      .withValues(alpha: 0.1),
-                                                  borderRadius:
-                                                      BorderRadius.circular(35),
+                                          GestureDetector(
+                                            onTap: () async {
+                                              await Clipboard.setData(
+                                                ClipboardData(
+                                                  text:
+                                                      widget.dva.accountNumber,
                                                 ),
-                                                child: Center(
-                                                  child: SvgPicture.asset(
-                                                    Assets.copyWhite,
-                                                    width: 20,
-                                                    height: 20,
-                                                    fit: BoxFit.contain,
+                                              );
+                                              if (!context.mounted) return;
+                                              ScaffoldMessenger.of(
+                                                context,
+                                              ).showSnackBar(
+                                                const SnackBar(
+                                                  content: Text(
+                                                    'Account number copied',
                                                   ),
                                                 ),
-                                              ),
-                                              const SizedBox(height: 4),
-                                              const Material(
-                                                color: Colors.transparent,
-                                                child: Text(
-                                                  'Copy',
-                                                  style: TextStyle(
-                                                    fontFamily: 'Roboto',
-                                                    fontWeight: FontWeight.w400,
-                                                    fontSize: 13,
-                                                    letterSpacing: 0.02,
-                                                    color: Colors.white,
+                                              );
+                                            },
+                                            child: Column(
+                                              children: [
+                                                Container(
+                                                  width: 40,
+                                                  height: 40,
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.white
+                                                        .withValues(alpha: 0.1),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          35,
+                                                        ),
+                                                  ),
+                                                  child: Center(
+                                                    child: SvgPicture.asset(
+                                                      Assets.copyWhite,
+                                                      width: 20,
+                                                      height: 20,
+                                                      fit: BoxFit.contain,
+                                                    ),
                                                   ),
                                                 ),
-                                              ),
-                                            ],
+                                                const SizedBox(height: 4),
+                                                const Material(
+                                                  color: Colors.transparent,
+                                                  child: Text(
+                                                    'Copy',
+                                                    style: TextStyle(
+                                                      fontFamily: 'Roboto',
+                                                      fontWeight:
+                                                          FontWeight.w400,
+                                                      fontSize: 13,
+                                                      letterSpacing: 0.02,
+                                                      color: Colors.white,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
                                           ),
                                           // Share
                                           GestureDetector(

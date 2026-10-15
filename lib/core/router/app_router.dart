@@ -39,7 +39,6 @@ import '../../features/auth/presentation/unlock_screens.dart';
 import '../../features/support/presentation/memo_chat_screen.dart';
 import '../../features/support/presentation/support_chat_screen.dart';
 import '../../features/support/presentation/support_screen.dart';
-import '../../features/support/presentation/support_ticket_screen.dart';
 import '../../features/wallet/presentation/wallet_widget_screen.dart';
 import '../../features/wallet/presentation/wallet_overview_screen.dart';
 import '../../features/transactions/presentation/transaction_details_screen.dart';
@@ -133,9 +132,8 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       slideRoute(Routes.supportChat, const SupportChatScreen()),
       GoRoute(
         path: Routes.supportTicket,
-        pageBuilder: (context, state) => buildPageWithTransition(
-          SupportTicketScreen(id: state.pathParameters['id']!),
-        ),
+        pageBuilder: (context, state) =>
+            buildPageWithTransition(const SupportChatScreen()),
       ),
       slideRoute(Routes.walletWidget, const WalletWidgetScreen()),
       slideRoute(Routes.walletOverview, const WalletOverviewScreen()),

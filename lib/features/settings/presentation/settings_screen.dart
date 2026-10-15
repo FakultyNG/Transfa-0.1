@@ -7,7 +7,6 @@ import '../../../core/constants/assets.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
-import '../../../data/mock_api/mock_data.dart';
 import '../../../data/notifications/push_notification_service.dart';
 import '../../../data/repositories/repositories.dart';
 import '../../../shared/widgets/homeFab.dart';
@@ -20,7 +19,9 @@ class SettingsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final user = ref.watch(currentUserProvider) ?? MockData.currentUser;
+    final liveProfile = ref.watch(profileProvider);
+    final user = liveProfile.asData?.value ?? ref.watch(currentUserProvider);
+    final fullName = user?.fullName.trim() ?? '';
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -56,7 +57,8 @@ class SettingsScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 36),
               _ProfileRow(
-                name: user.fullName,
+                name: fullName.isNotEmpty ? fullName : 'Transfa',
+                imageUrl: user?.avatarUrl,
                 onTap: () => context.push(Routes.profile),
               ),
               const SizedBox(height: 20),
@@ -148,8 +150,13 @@ class SettingsScreen extends ConsumerWidget {
 
 class _ProfileRow extends StatelessWidget {
   final String name;
+  final String? imageUrl;
   final VoidCallback onTap;
-  const _ProfileRow({required this.name, required this.onTap});
+  const _ProfileRow({
+    required this.name,
+    required this.imageUrl,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -174,7 +181,12 @@ class _ProfileRow extends StatelessWidget {
             CircleAvatar(
               radius: 28,
               backgroundColor: Colors.grey.shade300,
-              backgroundImage: const AssetImage(Assets.coperateMan),
+              backgroundImage: imageUrl == null || imageUrl!.isEmpty
+                  ? null
+                  : NetworkImage(imageUrl!),
+              child: imageUrl == null || imageUrl!.isEmpty
+                  ? const Icon(Icons.person_rounded, color: Colors.white)
+                  : null,
             ),
             const SizedBox(width: 14),
             Expanded(

@@ -374,7 +374,8 @@ class MockApi implements TransfaApi {
   @override
   Future<AppTransaction> confirmTransfer({
     required TransferQuote quote,
-    required String passcode,
+    String? passcode,
+    String? biometricDeviceId,
     required String recipientName,
     String? recipientAccount,
     String? bankName,
@@ -560,7 +561,7 @@ class MockApi implements TransfaApi {
   );
 
   @override
-  Future<BiometricStatus> getBiometricStatus() => _delay(
+  Future<BiometricStatus> getBiometricStatus(String deviceId) => _delay(
     BiometricStatus(
       enabled: _biometricEnabled,
       method: _biometricEnabled ? 'biometric' : null,

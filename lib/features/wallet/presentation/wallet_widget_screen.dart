@@ -8,7 +8,6 @@ import '../../../core/constants/assets.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../shared/widgets/wallpaper_scaffold.dart';
-import '../../../shared/widgets/transfa_logo.dart';
 
 /// "Wallet / For everything you do" — the iOS-widget-style frosted card
 /// shown on the home/lock screen surface. Distinct from the full Wallet
@@ -130,7 +129,8 @@ class WalletWidgetScreen extends StatelessWidget {
                 _AppIcon(
                   asset: Assets.reeplayIcon,
                   label: 'Reeplay',
-                  onTap: () => context.push(Routes.giftCards),
+                  comingSoon: true,
+                  onTap: () {},
                 ),
               ],
             ),
@@ -155,45 +155,68 @@ class _AppIcon extends StatelessWidget {
   final String asset;
   final String label;
   final VoidCallback onTap;
+  final bool comingSoon;
 
   const _AppIcon({
     required this.asset,
     required this.label,
     required this.onTap,
+    this.comingSoon = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final icon = label == 'Reeplay'
+        ? Container(
+            width: 60,
+            height: 60,
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFFFFF),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            padding: const EdgeInsets.all(15),
+            child: Image.asset(asset, fit: BoxFit.contain),
+          )
+        : SizedBox(
+            width: 60,
+            height: 60,
+            child: Image.asset(asset, fit: BoxFit.contain),
+          );
     return GestureDetector(
-      onTap: onTap,
+      onTap: comingSoon ? null : onTap,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          label == 'Reeplay'
-              ? Container(
-                  width: 60,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFFFFF),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  padding: const EdgeInsets.all(15),
-                  child: Image.asset(asset, fit: BoxFit.contain),
-                )
-              : SizedBox(
-                  width: 60,
-                  height: 60,
-                  child: Image.asset(asset, fit: BoxFit.contain),
+          if (comingSoon)
+            Opacity(
+              opacity: 0.45,
+              child: ColorFiltered(
+                colorFilter: const ColorFilter.mode(
+                  Colors.grey,
+                  BlendMode.saturation,
                 ),
+                child: icon,
+              ),
+            )
+          else
+            icon,
           const SizedBox(height: 6),
           Text(
             label,
             style: AppTypography.body.copyWith(
-              color: Colors.white,
+              color: comingSoon ? Colors.white54 : Colors.white,
               fontSize: 14,
               fontWeight: FontWeight.w500,
             ),
           ),
+          if (comingSoon)
+            Text(
+              'Coming soon',
+              style: AppTypography.caption.copyWith(
+                color: Colors.white38,
+                fontSize: 10,
+              ),
+            ),
         ],
       ),
     );

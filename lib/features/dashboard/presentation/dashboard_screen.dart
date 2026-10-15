@@ -6,13 +6,14 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/assets.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/utils/error_messages.dart';
 import '../../../core/utils/formatters.dart';
-import '../../../data/mock_api/mock_data.dart';
+import '../../../data/models/user.dart';
+import '../../../data/models/wallet.dart';
 import '../../../data/repositories/repositories.dart';
 import '../../../shared/widgets/transfa_logo.dart';
 import '../../../shared/widgets/wallpaper_scaffold.dart';
 import '../../../features/pop-ups/viewBalance_popup.dart';
-import '../../../features/pop-ups/transfaAccountShare_popup.dart';
 import '../../../features/pop-ups/cashdrop_popup.dart';
 
 /// iOS-style home: bell top-right, "🏠 Home" title, frosted balance widget
@@ -23,7 +24,8 @@ class DashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final wallet = ref.watch(walletProvider);
-    final user = ref.watch(currentUserProvider) ?? MockData.currentUser;
+    final liveProfile = ref.watch(profileProvider);
+    final user = liveProfile.asData?.value ?? ref.watch(currentUserProvider);
     final balance = wallet.maybeWhen(
       data: (w) => w.ngnBalance,
       orElse: () => 0,
@@ -82,7 +84,8 @@ class DashboardScreen extends ConsumerWidget {
               user: user,
               balance: balance,
               showAddMoney: showAddMoney,
-              onAddMoney: () => _showViewBalancePopup(context, user, balance),
+              onAddMoney: () =>
+                  _showViewBalancePopup(context, ref, user, balance),
             ),
             const SizedBox(height: 32), // Equal spacing
             // App icon grid
@@ -159,14 +162,49 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  void _showViewBalancePopup(BuildContext context, dynamic user, num balance) {
+  Future<void> _showViewBalancePopup(
+    BuildContext context,
+    WidgetRef ref,
+    AppUser? user,
+    num balance,
+  ) async {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black.withValues(alpha: 0.45),
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+    late final DedicatedVirtualAccount dva;
+    num displayedBalance = balance;
+    try {
+      final walletRepository = ref.read(walletRepositoryProvider);
+      final results = await Future.wait<Object>([
+        walletRepository.createDva(),
+        walletRepository.get(),
+      ]);
+      dva = results[0] as DedicatedVirtualAccount;
+      displayedBalance = (results[1] as Wallet).ngnBalance;
+      ref.invalidate(dvaProvider);
+      ref.invalidate(walletProvider);
+    } catch (error) {
+      if (context.mounted) Navigator.of(context, rootNavigator: true).pop();
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
+      }
+      return;
+    }
+    if (!context.mounted) return;
+    Navigator.of(context, rootNavigator: true).pop();
     showDialog(
       context: context,
       barrierDismissible: true,
       barrierColor: Colors.black.withValues(alpha: 0.6),
       builder: (context) => ViewBalancePopup(
         user: user,
-        balance: balance,
+        balance: displayedBalance,
+        dva: dva,
         onShareTap: () {
           Navigator.of(context).pop();
           _showTransfaAccountFoundPopup(context);
@@ -180,12 +218,7 @@ class DashboardScreen extends ConsumerWidget {
   }
 
   void _showTransfaAccountFoundPopup(BuildContext context) {
-    showDialog(
-      context: context,
-      barrierDismissible: true,
-      barrierColor: Colors.black.withValues(alpha: 0.6),
-      builder: (context) => const TransfaAccountSharePopup(),
-    );
+    context.push(Routes.shareAccount);
   }
 
   void _showCashDropPopup(BuildContext context) {
@@ -199,7 +232,7 @@ class DashboardScreen extends ConsumerWidget {
 }
 
 class _BalanceWidget extends StatelessWidget {
-  final dynamic user;
+  final AppUser? user;
   final num balance;
   final bool showAddMoney;
   final VoidCallback? onAddMoney;
@@ -252,10 +285,7 @@ class _BalanceWidget extends StatelessWidget {
                       colors: [Color(0xFF00BCF6), Color(0xFF006EFF)],
                     ),
                   ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(30),
-                    child: Image.asset(Assets.coperateMan, fit: BoxFit.cover),
-                  ),
+                  child: ClipOval(child: _ProfileImage(url: user?.avatarUrl)),
                 ),
                 const SizedBox(height: 8), // Space between photo and balance
                 Row(
@@ -304,6 +334,25 @@ class _BalanceWidget extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ProfileImage extends StatelessWidget {
+  const _ProfileImage({this.url});
+
+  final String? url;
+
+  @override
+  Widget build(BuildContext context) {
+    if (url == null || url!.isEmpty) {
+      return const Icon(Icons.person_rounded, color: Colors.white, size: 34);
+    }
+    return Image.network(
+      url!,
+      fit: BoxFit.cover,
+      errorBuilder: (_, _, _) =>
+          const Icon(Icons.person_rounded, color: Colors.white, size: 34),
     );
   }
 }

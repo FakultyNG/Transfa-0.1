@@ -113,11 +113,15 @@ void main() {
         'phoneNumber': '2348012345678',
         'kycStatus': 'verified',
         'walletStatus': 'active',
+        'profileImageUrl': 'https://cdn.example.com/verified-selfie.jpg',
+        'country': 'Nigeria',
       });
 
       expect(user.fullName, 'Adaeze Okafor');
       expect(user.phone, '2348012345678');
       expect(user.isVerified, isTrue);
+      expect(user.country, 'Nigeria');
+      expect(user.avatarUrl, 'https://cdn.example.com/verified-selfie.jpg');
     });
 
     test('parses wallet decimals from numbers or strings', () {
@@ -152,12 +156,18 @@ void main() {
         'currency': 'NGN',
         'status': 'successful',
         'description': 'Wallet funding',
+        'fee': 100,
+        'totalDebit': 50100,
+        'reference': 'TF-20260525-001',
         'createdAt': '2026-05-25T10:30:00Z',
       });
 
       expect(transaction.type, TxType.credit);
       expect(transaction.status, TxStatus.success);
       expect(transaction.counterpartyName, 'Wallet funding');
+      expect(transaction.fee, 100);
+      expect(transaction.totalDebit, 50100);
+      expect(transaction.reference, 'TF-20260525-001');
     });
 
     test('round-trips a transfer quote', () {

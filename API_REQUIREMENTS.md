@@ -37,6 +37,29 @@ the explicit retry route after the initial challenge.
 - Full support-ticket workflow and support attachment upload.
 - CashDrop feature config, registration/status/disable/resolve.
 
+## Live Home And Payment Flow
+
+- Home balance and transaction history come from `/wallet` and `/transactions`.
+- Add Money calls `POST /wallet/dva/create` and displays the returned bank and
+  account number with the live wallet balance.
+- The Naira keypad carries its entered amount into bank selection/account
+  resolution, then uses `/transfers/ngn/quote` for the server-owned fee and
+  total. `NGN_TRANSFER_FIXED_FEE` is the backend fallback when no database
+  pricing override exists.
+- Touch to Confirm invokes local Face ID/fingerprint. When the device is already
+  enabled as a trusted biometric device, confirmation sends
+  `biometricDeviceId`; otherwise the UI falls back to the 5-digit PIN and sends
+  `passcode`. The app never sends both.
+- Confirmation and transaction-history responses expose `fee`, `totalDebit`,
+  `reference`, recipient account/name, bank, and narration so status and receipt
+  screens contain live data.
+- Support is presented as one continuous instant-message thread. The existing
+  ticket endpoints remain an internal persistence mechanism; the app merges the
+  customer's message history and replies to the latest open record.
+- Home, Settings, profile, and CashDrop use `profileImageUrl` from `/profile` or
+  `/cash-drop/status`. This URL is the successfully matched camera faceshot,
+  never the BVN provider photo or a bundled demo asset.
+
 All paths use `/api/v1`. The corrected CNY quote path is
 `POST /api/v1/transfers/cny/quote`.
 

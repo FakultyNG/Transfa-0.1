@@ -4,7 +4,6 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/assets.dart';
-import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../data/repositories/repositories.dart';
@@ -21,7 +20,7 @@ class ProfileScreen extends ConsumerWidget {
     final kycStatus = ref.watch(kycStatusProvider);
     final user = profile.asData?.value ?? ref.watch(currentUserProvider);
     final firstName = (user?.fullName.trim().isNotEmpty ?? false)
-        ? user!.fullName.trim().split(' ').first
+        ? user!.fullName.trim().split(RegExp(r'\s+')).first
         : 'Transfa';
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -39,7 +38,18 @@ class ProfileScreen extends ConsumerWidget {
                       CircleAvatar(
                         radius: 64,
                         backgroundColor: Colors.grey.shade300,
-                        backgroundImage: const AssetImage(Assets.magic),
+                        backgroundImage:
+                            user?.avatarUrl == null || user!.avatarUrl!.isEmpty
+                            ? null
+                            : NetworkImage(user.avatarUrl!),
+                        child:
+                            user?.avatarUrl == null || user!.avatarUrl!.isEmpty
+                            ? const Icon(
+                                Icons.person_rounded,
+                                color: Colors.white,
+                                size: 64,
+                              )
+                            : null,
                       ),
                       const SizedBox(height: 16),
                       Text(
@@ -71,7 +81,9 @@ class ProfileScreen extends ConsumerWidget {
                     ),
                   ),
                   child: Text(
-                    'Nigerian',
+                    user?.country?.isNotEmpty == true
+                        ? user!.country!
+                        : 'Not provided',
                     style: AppTypography.subheading.copyWith(fontSize: 17),
                   ),
                 ),
@@ -169,16 +181,6 @@ class ProfileScreen extends ConsumerWidget {
                 //           .copyWith(fontSize: 17, color: AppColors.textMuted)),
                 // ),
               ],
-            ),
-            Positioned(
-              right: 20,
-              bottom: 16,
-              child: FloatingActionButton.small(
-                heroTag: 'edit-profile',
-                tooltip: 'Edit profile',
-                onPressed: () => context.push(Routes.profileEdit),
-                child: const Icon(Icons.edit_rounded),
-              ),
             ),
             Positioned(
               left: 20,

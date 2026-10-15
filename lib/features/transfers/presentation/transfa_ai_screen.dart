@@ -8,10 +8,11 @@ import '../../../core/constants/assets.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/utils/formatters.dart';
+import '../../../data/models/transaction.dart';
+import '../../../data/repositories/repositories.dart';
 import '../../../shared/widgets/transfa_modal_header.dart';
 import 'transfer_state.dart';
-import '../../../features/bottom_sheets/pay_bottomsheet.dart';
-import '../../../features/bottom_sheets/sendDollarsSheet.dart';
 import '../../../data/mock_api/currency.dart';
 import '../../../shared/widgets/homeFab.dart';
 
@@ -26,12 +27,9 @@ class TransfaAiScreen extends ConsumerStatefulWidget {
 
 class _TransfaAiScreenState extends ConsumerState<TransfaAiScreen> {
   late TransfaAiView _view = widget.initialView;
-  String _digits = '2000000';
+  String _digits = '0';
   AmountCurrency _currency = AmountCurrency.ngn;
   String _memo = '';
-  String _routingInfo = 'Routing...';
-  String _swiftInfo = 'Routing...';
-  String _swiftCode = '009234590';
   String? _selectedTxName;
 
   void _toggle(TransfaAiView v) {
@@ -42,6 +40,7 @@ class _TransfaAiScreenState extends ConsumerState<TransfaAiScreen> {
     setState(() {
       _selectedTxName = _selectedTxName == name ? null : name;
     });
+    context.push('/transactions/$name');
   }
 
   void _tap(String d) => setState(() {
@@ -91,63 +90,20 @@ class _TransfaAiScreenState extends ConsumerState<TransfaAiScreen> {
     if (value <= 0) return;
     ref.read(transferDraftProvider.notifier).state = ref
         .read(transferDraftProvider)
-        .copyWith(amount: value);
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(43), // Reduced from 45 to 43
-          topRight: Radius.circular(43), // Reduced from 45 to 43
-        ),
-      ),
-      builder: (context) => PaySheet(
-        amount: _formatted,
-        currency: _currency,
-        memo: _memo,
-        onMemoChanged: (newMemo) => setState(() => _memo = newMemo),
-      ),
-    );
+        .copyWith(currency: TxCurrency.ngn, amount: value, memo: _memo);
+    context.push(Routes.transferDetails);
   }
 
   void _sendUSD() {
     final value = double.tryParse(_digits) ?? 0;
     if (value <= 0) return;
+    final currency = _currency == AmountCurrency.cny
+        ? TxCurrency.cny
+        : TxCurrency.usd;
     ref.read(transferDraftProvider.notifier).state = ref
         .read(transferDraftProvider)
-        .copyWith(amount: value);
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(43), // Reduced from 45 to 43
-          topRight: Radius.circular(43), // Reduced from 45 to 43
-        ),
-      ),
-      builder: (context) => SendDollarsSheet(
-        amount: _formatted,
-        currency: AmountCurrency.usd,
-        memo: _memo,
-        accountNumber: "4578901234",
-        routingNumber: "25674",
-        accountName: "Bright Wilbour",
-        bankName: 'Bank of America',
-        swiftCode: _swiftCode,
-        bankAddress: 'Washington DC',
-        country: 'United States',
-        userBalance: 50000000.00,
-        transactionFee: 1500.00,
-        onMemoChanged: (newMemo) => setState(() => _memo = newMemo),
-        onRoutingInfo: (newRoutingInfo) =>
-            setState(() => _routingInfo = newRoutingInfo),
-        onSwiftInfo: (newSwiftInfo) =>
-            setState(() => _swiftInfo = newSwiftInfo),
-      ),
-    );
+        .copyWith(currency: currency, amount: value, memo: _memo);
+    context.push(Routes.transferDetails);
   }
 
   void _handleSend() {
@@ -189,6 +145,7 @@ class _TransfaAiScreenState extends ConsumerState<TransfaAiScreen> {
                     currency: _currency,
                     selectedTxName: _selectedTxName,
                     onSelectTx: _selectTx,
+                    transactions: ref.watch(transactionsProvider),
                   )
                 : _KeypadView(
                     key: const ValueKey(TransfaAiView.keypad),
@@ -232,200 +189,30 @@ class _TodayView extends StatelessWidget {
   final AmountCurrency currency;
   final String? selectedTxName;
   final Function(String) onSelectTx;
+  final AsyncValue<List<AppTransaction>> transactions;
 
   const _TodayView({
     super.key,
     required this.currency,
     this.selectedTxName,
     required this.onSelectTx,
+    required this.transactions,
   });
 
   bool get _isUsd => currency == AmountCurrency.usd;
 
-  static const _ngnGroup1 = [
-    _Tx(
-      avatar: _AvatarKind.photo,
-      photoAsset: Assets.magic,
-      name: 'Magic',
-      meta: '10 Acres',
-      direction: _Dir.sent,
-      whenText: 'Right now',
-      amount: '₦25,000,000',
-    ),
-    _Tx(
-      avatar: _AvatarKind.spotify,
-      name: 'Spotify',
-      meta: 'Music Subscription',
-      direction: _Dir.sent,
-      whenText: '12 minutes ago',
-      amount: '₦9.99',
-    ),
-    _Tx(
-      avatar: _AvatarKind.photo,
-      photoAsset: Assets.avatarJanelle,
-      name: 'Janelle',
-      meta: 'My Birthday',
-      direction: _Dir.received,
-      whenText: 'Thursday',
-      amount: '₦250',
-    ),
-    _Tx(
-      avatar: _AvatarKind.card,
-      name: 'Card •••• 6420',
-      meta: 'Money Added',
-      direction: _Dir.received,
-      whenText: '2 days ago',
-      amount: '₦250,000',
-    ),
-  ];
-  static const _ngnGroup2 = [
-    _Tx(
-      avatar: _AvatarKind.photo,
-      photoAsset: Assets.magic,
-      name: 'Magic',
-      meta: '10 Acres',
-      direction: _Dir.sent,
-      whenText: 'Right now',
-      amount: '₦25,000,000',
-    ),
-    _Tx(
-      avatar: _AvatarKind.spotify,
-      name: 'Spotify',
-      meta: 'Music Subscription',
-      direction: _Dir.sent,
-      whenText: '12 minutes ago',
-      amount: '₦9.99',
-    ),
-    _Tx(
-      avatar: _AvatarKind.photo,
-      photoAsset: Assets.avatarJanelle,
-      name: 'Janelle',
-      meta: 'My Birthday Cake',
-      status: _Status.unableToSend,
-      amount: '₦250',
-    ),
-    _Tx(
-      avatar: _AvatarKind.card,
-      name: 'Card •••• 6420',
-      meta: 'Money Added',
-      direction: _Dir.received,
-      whenText: '2 days ago',
-      amount: '₦250,000',
-    ),
-  ];
-  static const _ngnGroup3 = [
-    _Tx(
-      avatar: _AvatarKind.photo,
-      photoAsset: Assets.avatarSarah,
-      name: 'Sarah',
-      meta: 'Estate Survey',
-      status: _Status.processing,
-      amount: '₦250,000',
-    ),
-    _Tx(
-      avatar: _AvatarKind.photo,
-      photoAsset: Assets.magic,
-      name: 'Magic',
-      meta: 'Merry Christmas 🎅🎄❄️',
-      direction: _Dir.received,
-      whenText: '10 months ago',
-      amount: '₦25,000',
-    ),
-    _Tx(
-      avatar: _AvatarKind.connectic,
-      name: 'Connectic',
-      meta: 'Transfa Space Program',
-      direction: _Dir.sent,
-      whenText: '10/6/2025',
-      amount: '₦9,000,000',
-    ),
-    _Tx(
-      avatar: _AvatarKind.spotify,
-      name: 'Spotify',
-      meta: 'Music Subscription',
-      direction: _Dir.received,
-      whenText: '5/9/2025',
-      amount: '₦9.99',
-    ),
-  ];
-  static const _usdGroup1 = [
-    _Tx(
-      avatar: _AvatarKind.photo,
-      photoAsset: Assets.magic,
-      name: 'Magic',
-      meta: '10 Acres',
-      direction: _Dir.sent,
-      whenText: 'Right now',
-      amount: '\$277,500',
-    ),
-    _Tx(
-      avatar: _AvatarKind.spotify,
-      name: 'Spotify',
-      meta: 'Music Subscription',
-      direction: _Dir.sent,
-      whenText: '12 minutes ago',
-      amount: '\$9.99',
-    ),
-    _Tx(
-      avatar: _AvatarKind.photo,
-      photoAsset: Assets.avatarJanelle,
-      name: 'Janelle',
-      meta: 'My Birthday',
-      direction: _Dir.received,
-      whenText: 'Thursday',
-      amount: '\$250',
-    ),
-    _Tx(
-      avatar: _AvatarKind.connectic,
-      name: 'Connectic',
-      meta: 'Internet Subscription',
-      direction: _Dir.received,
-      whenText: '2 days ago',
-      amount: '\$250',
-    ),
-  ];
-  static const _usdGroup2 = [
-    _Tx(
-      avatar: _AvatarKind.photo,
-      photoAsset: Assets.avatarSarah,
-      name: 'Sarah',
-      meta: 'Estate Survey',
-      direction: _Dir.sent,
-      whenText: '3 months ago',
-      amount: '\$250,000',
-    ),
-    _Tx(
-      avatar: _AvatarKind.photo,
-      photoAsset: Assets.magic,
-      name: 'Magic',
-      meta: 'Merry Christmas 🎅🎄❄️',
-      direction: _Dir.received,
-      whenText: '10 months ago',
-      amount: '\$25,000',
-    ),
-    _Tx(
-      avatar: _AvatarKind.connectic,
-      name: 'Connectic',
-      meta: 'Transfa Space Program',
-      direction: _Dir.sent,
-      whenText: '10/6/2025',
-      amount: '\$9,000',
-    ),
-    _Tx(
-      avatar: _AvatarKind.spotify,
-      name: 'Spotify',
-      meta: 'Music Subscription',
-      direction: _Dir.received,
-      whenText: '5/9/2025',
-      amount: '\$9.99',
-    ),
-  ];
-
   @override
   Widget build(BuildContext context) {
-    final groups = _isUsd
-        ? const [_usdGroup1, _usdGroup2]
-        : const [_ngnGroup1, _ngnGroup2, _ngnGroup3];
+    final items =
+        transactions.valueOrNull
+            ?.where(
+              (item) => _isUsd
+                  ? item.currency == TxCurrency.usd
+                  : item.currency == TxCurrency.ngn,
+            )
+            .map(_fromTransaction)
+            .toList() ??
+        const <_Tx>[];
     return ListView(
       padding: EdgeInsets.zero,
       children: [
@@ -433,16 +220,67 @@ class _TodayView extends StatelessWidget {
         const SizedBox(height: 24),
         const _RecentsHeader(),
         const SizedBox(height: 14),
-        for (var i = 0; i < groups.length; i++) ...[
+        if (transactions.isLoading)
+          const Padding(
+            padding: EdgeInsets.all(36),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (transactions.hasError)
+          Padding(
+            padding: const EdgeInsets.all(28),
+            child: Text(
+              'Could not load transaction history.',
+              textAlign: TextAlign.center,
+              style: AppTypography.body,
+            ),
+          )
+        else if (items.isEmpty)
+          Padding(
+            padding: const EdgeInsets.all(36),
+            child: Text(
+              'No transactions yet',
+              textAlign: TextAlign.center,
+              style: AppTypography.body.copyWith(color: AppColors.textMuted),
+            ),
+          )
+        else
           _TxGroup(
-            items: groups[i],
+            items: items,
             selectedTxName: selectedTxName,
             onSelectTx: onSelectTx,
           ),
-          SizedBox(height: i < groups.length - 1 ? 22 : 140),
-        ],
+        const SizedBox(height: 140),
       ],
     );
+  }
+
+  _Tx _fromTransaction(AppTransaction transaction) {
+    final amount = transaction.currency == TxCurrency.usd
+        ? AppFormat.usd(transaction.amount)
+        : AppFormat.ngn(transaction.amount);
+    return _Tx(
+      transactionId: transaction.id,
+      avatar: _AvatarKind.card,
+      name: transaction.counterpartyName,
+      meta: transaction.bankName ?? transaction.memo ?? 'Transfa',
+      direction: transaction.type == TxType.credit ? _Dir.received : _Dir.sent,
+      whenText: _relativeTime(transaction.createdAt),
+      status: transaction.status == TxStatus.failed
+          ? _Status.unableToSend
+          : transaction.status == TxStatus.pending
+          ? _Status.processing
+          : null,
+      amount: amount,
+    );
+  }
+
+  String _relativeTime(DateTime value) {
+    final difference = DateTime.now().difference(value.toLocal());
+    if (difference.inMinutes < 1) return 'Right now';
+    if (difference.inHours < 1) return '${difference.inMinutes}m ago';
+    if (difference.inDays < 1) return '${difference.inHours}h ago';
+    if (difference.inDays == 1) return 'Yesterday';
+    return '${difference.inDays}d ago';
   }
 }
 
@@ -535,15 +373,15 @@ class _RecentsHeader extends StatelessWidget {
   );
 }
 
-enum _AvatarKind { photo, spotify, card, connectic }
+enum _AvatarKind { spotify, card, connectic }
 
 enum _Dir { sent, received }
 
 enum _Status { unableToSend, processing }
 
 class _Tx {
+  final String? transactionId;
   final _AvatarKind avatar;
-  final String? photoAsset;
   final String name;
   final String meta;
   final _Dir? direction;
@@ -551,11 +389,11 @@ class _Tx {
   final _Status? status;
   final String amount;
   const _Tx({
+    this.transactionId,
     required this.avatar,
     required this.name,
     required this.meta,
     required this.amount,
-    this.photoAsset,
     this.direction,
     this.whenText,
     this.status,
@@ -593,8 +431,9 @@ class _TxGroup extends StatelessWidget {
         for (var i = 0; i < items.length; i++) ...[
           _TxRow(
             tx: items[i],
-            isSelected: selectedTxName == items[i].name,
-            onTap: () => onSelectTx(items[i].name),
+            isSelected:
+                selectedTxName == (items[i].transactionId ?? items[i].name),
+            onTap: () => onSelectTx(items[i].transactionId ?? items[i].name),
           ),
           if (i < items.length - 1)
             const Divider(
@@ -742,8 +581,6 @@ class _Avatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     switch (tx.avatar) {
-      case _AvatarKind.photo:
-        return ClipOval(child: Image.asset(tx.photoAsset!, fit: BoxFit.cover));
       case _AvatarKind.spotify:
         return Container(
           decoration: const BoxDecoration(

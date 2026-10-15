@@ -1,13 +1,14 @@
 import 'dart:convert';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../core/constants/assets.dart';
 import '../../core/router/routes.dart';
-import '../../core/theme/app_colors.dart';
-import '../../core/theme/app_typography.dart';
 import '../../core/utils/error_messages.dart';
 import '../../data/models/transaction.dart';
 import '../../data/repositories/repositories.dart';
@@ -20,16 +21,33 @@ class CashDropScreen extends ConsumerStatefulWidget {
   ConsumerState<CashDropScreen> createState() => _CashDropScreenState();
 }
 
-class _CashDropScreenState extends ConsumerState<CashDropScreen> {
+class _CashDropScreenState extends ConsumerState<CashDropScreen>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _slideController = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 500),
+  )..forward();
+  late final Animation<Offset> _slideAnimation =
+      Tween<Offset>(begin: const Offset(0, -1), end: Offset.zero).animate(
+        CurvedAnimation(parent: _slideController, curve: Curves.easeOutCubic),
+      );
+  late final Animation<double> _fadeAnimation = Tween<double>(
+    begin: 0,
+    end: 1,
+  ).animate(CurvedAnimation(parent: _slideController, curve: Curves.easeOut));
+
   bool _loading = false;
+
+  @override
+  void dispose() {
+    _slideController.dispose();
+    super.dispose();
+  }
 
   Future<void> _setEnabled(bool enabled) async {
     final config = await ref.read(cashDropConfigProvider.future);
     if (!config.featureEnabled) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('CashDrop is not available yet.')),
-      );
+      _message('CashDrop is not available yet.');
       return;
     }
     setState(() => _loading = true);
@@ -42,10 +60,7 @@ class _CashDropScreenState extends ConsumerState<CashDropScreen> {
       }
       ref.invalidate(cashDropStatusProvider);
     } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
+      _message(userFacingError(error));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -54,15 +69,12 @@ class _CashDropScreenState extends ConsumerState<CashDropScreen> {
   Future<void> _scan() async {
     final config = await ref.read(cashDropConfigProvider.future);
     if (!config.featureEnabled) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('CashDrop is not available yet.')),
-      );
+      _message('CashDrop is not available yet.');
       return;
     }
     final image = await ImagePicker().pickImage(
       source: ImageSource.camera,
-      imageQuality: 80,
+      imageQuality: 88,
       maxWidth: 1600,
     );
     if (image == null) return;
@@ -75,11 +87,11 @@ class _CashDropScreenState extends ConsumerState<CashDropScreen> {
       final suggestions = await ref
           .read(transferRepositoryProvider)
           .suggestBanks(match.accountNumber);
-      final selected = suggestions.where(
+      final matchingBanks = suggestions.where(
         (item) => item.bankName.toLowerCase() == match.bankName.toLowerCase(),
       );
-      final bank = selected.isNotEmpty
-          ? selected.first
+      final bank = matchingBanks.isNotEmpty
+          ? matchingBanks.first
           : suggestions.isNotEmpty
           ? suggestions.first
           : null;
@@ -96,138 +108,320 @@ class _CashDropScreenState extends ConsumerState<CashDropScreen> {
       if (!mounted) return;
       final router = GoRouter.of(context);
       Navigator.of(context).pop();
-      router.push(Routes.transfer);
+      router.push(Routes.amount);
     } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
+      _message(userFacingError(error));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
+  void _message(String value) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(value)));
+  }
+
   @override
   Widget build(BuildContext context) {
-    final status = ref.watch(cashDropStatusProvider);
     final config = ref.watch(cashDropConfigProvider);
+    final status = ref.watch(cashDropStatusProvider);
+    final user = ref.watch(currentUserProvider);
+    final featureEnabled = config.asData?.value.featureEnabled ?? false;
+    final cashDrop = status.asData?.value;
+    final receiving = cashDrop?.enabled ?? false;
+    final profileUrl = cashDrop?.profileImageUrl ?? user?.avatarUrl;
+    final error = config.hasError
+        ? userFacingError(config.error!)
+        : status.hasError
+        ? userFacingError(status.error!)
+        : null;
+
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('CashDrop'),
-        leading: IconButton(
-          tooltip: 'Close',
-          onPressed: () => Navigator.of(context).pop(),
-          icon: const Icon(Icons.close_rounded),
-        ),
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: config.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (error, _) => Center(child: Text(userFacingError(error))),
-            data: (feature) {
-              if (!feature.featureEnabled) {
-                return const _CashDropDisabledView();
-              }
-              return status.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (error, _) =>
-                    Center(child: Text(userFacingError(error))),
-                data: (item) => Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Icon(Icons.face_retouching_natural_rounded, size: 72),
-                    const SizedBox(height: 18),
-                    Text(
-                      item.enabled ? 'CashDrop is active' : 'Enable CashDrop',
-                      textAlign: TextAlign.center,
-                      style: AppTypography.displayMedium,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      item.enabled
-                          ? 'Your verified profile image can receive CashDrop payments.'
-                          : 'Link your verified profile image and funding account to receive payments.',
-                      textAlign: TextAlign.center,
-                      style: AppTypography.bodyMuted,
-                    ),
-                    const SizedBox(height: 28),
-                    FilledButton.icon(
-                      onPressed: _loading ? null : _scan,
-                      icon: const Icon(Icons.camera_alt_rounded),
-                      label: const Text('Scan profile to pay'),
-                    ),
-                    const SizedBox(height: 12),
-                    OutlinedButton.icon(
-                      onPressed: _loading
-                          ? null
-                          : () => _setEnabled(!item.enabled),
-                      icon: Icon(
-                        item.enabled
-                            ? Icons.link_off_rounded
-                            : Icons.link_rounded,
-                      ),
-                      label: Text(
-                        item.enabled ? 'Disable CashDrop' : 'Enable receiving',
-                      ),
-                    ),
-                    if (_loading) ...[
-                      const SizedBox(height: 20),
-                      const LinearProgressIndicator(),
-                    ],
-                    const Spacer(),
-                    Text(
-                      'CashDrop matches verified profile images. It does not scan QR codes.',
-                      textAlign: TextAlign.center,
-                      style: AppTypography.caption,
-                    ),
-                  ],
-                ),
-              );
-            },
+      backgroundColor: Colors.transparent,
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: () => Navigator.of(context).pop(),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                child: Container(color: Colors.black.withValues(alpha: 0.2)),
+              ),
+            ),
           ),
-        ),
+          FadeTransition(
+            opacity: _fadeAnimation,
+            child: SlideTransition(
+              position: _slideAnimation,
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Container(
+                    width: 350,
+                    constraints: const BoxConstraints(maxHeight: 666),
+                    decoration: BoxDecoration(
+                      color: const Color(0x1AFCFCFB),
+                      borderRadius: BorderRadius.circular(56),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 5,
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(56),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 20, 20, 30),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                GestureDetector(
+                                  onTap: () => Navigator.of(context).pop(),
+                                  child: Container(
+                                    width: 50,
+                                    height: 10,
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withValues(
+                                        alpha: 0.3,
+                                      ),
+                                      borderRadius: BorderRadius.circular(35),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 30),
+                                _CashDropFace(profileUrl: profileUrl),
+                                const SizedBox(height: 20),
+                                Text(
+                                  user?.fullName.isNotEmpty == true
+                                      ? user!.fullName.split(' ').first
+                                      : 'Transfa',
+                                  style: const TextStyle(
+                                    fontFamily: 'Arial Rounded MT Bold',
+                                    fontSize: 30,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                const SizedBox(height: 28),
+                                Text(
+                                  error ??
+                                      (receiving
+                                          ? 'To receive, another Transfa user scans your face.'
+                                          : 'Enable receiving or scan another Transfa user to pay.'),
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    height: 1.4,
+                                    color: error == null
+                                        ? Colors.white.withValues(alpha: 0.65)
+                                        : const Color(0xFFFF9F9F),
+                                  ),
+                                ),
+                                const SizedBox(height: 22),
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    GestureDetector(
+                                      onTap: () => Navigator.of(context).pop(),
+                                      child: Container(
+                                        width: 50,
+                                        height: 50,
+                                        decoration: BoxDecoration(
+                                          gradient: const LinearGradient(
+                                            colors: [
+                                              Color(0xFFFFC30F),
+                                              Color(0xFF9747FF),
+                                            ],
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            35,
+                                          ),
+                                        ),
+                                        alignment: Alignment.center,
+                                        child: SvgPicture.asset(
+                                          Assets.home,
+                                          width: 26,
+                                          height: 26,
+                                        ),
+                                      ),
+                                    ),
+                                    Container(
+                                      width: 136,
+                                      height: 50,
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withValues(
+                                          alpha: 0.1,
+                                        ),
+                                        borderRadius: BorderRadius.circular(35),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          _CashDropControl(
+                                            active: receiving,
+                                            enabled:
+                                                featureEnabled && !_loading,
+                                            onTap: () =>
+                                                _setEnabled(!receiving),
+                                            child: SvgPicture.asset(
+                                              Assets.receive,
+                                              width: 16,
+                                              height: 20,
+                                            ),
+                                          ),
+                                          _CashDropControl(
+                                            active: false,
+                                            enabled:
+                                                featureEnabled && !_loading,
+                                            onTap: _scan,
+                                            child: SvgPicture.asset(
+                                              Assets.cashDrop,
+                                              width: 26,
+                                              height: 26,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                if (_loading ||
+                                    config.isLoading ||
+                                    status.isLoading) ...[
+                                  const SizedBox(height: 18),
+                                  const LinearProgressIndicator(
+                                    color: Color(0xFF00C2FF),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _CashDropDisabledView extends StatelessWidget {
-  const _CashDropDisabledView();
+class _CashDropFace extends StatelessWidget {
+  const _CashDropFace({this.profileUrl});
+
+  final String? profileUrl;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const Icon(Icons.face_retouching_off_rounded, size: 72),
-        const SizedBox(height: 18),
-        Text(
-          'CashDrop is unavailable',
-          textAlign: TextAlign.center,
-          style: AppTypography.displayMedium,
+    return SizedBox(
+      width: 250,
+      height: 250,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          ClipOval(
+            child: Container(
+              width: 190,
+              height: 190,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0xFF00BCF6), Color(0xFF006EFF)],
+                ),
+              ),
+              child: profileUrl == null || profileUrl!.isEmpty
+                  ? const Icon(
+                      Icons.person_rounded,
+                      color: Colors.white,
+                      size: 96,
+                    )
+                  : Image.network(
+                      profileUrl!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => const Icon(
+                        Icons.person_rounded,
+                        color: Colors.white,
+                        size: 96,
+                      ),
+                    ),
+            ),
+          ),
+          Positioned(
+            top: 10,
+            child: SvgPicture.asset(Assets.blueBubble, width: 45, height: 45),
+          ),
+          Positioned(
+            bottom: 10,
+            child: SvgPicture.asset(Assets.yellowBubble, width: 45, height: 45),
+          ),
+          Positioned(
+            left: 7,
+            child: SvgPicture.asset(
+              Assets.greenBubble,
+              width: 195,
+              height: 195,
+            ),
+          ),
+          Positioned(
+            right: 7,
+            child: SvgPicture.asset(Assets.redBubble, width: 195, height: 195),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CashDropControl extends StatelessWidget {
+  const _CashDropControl({
+    required this.active,
+    required this.enabled,
+    required this.onTap,
+    required this.child,
+  });
+
+  final bool active;
+  final bool enabled;
+  final VoidCallback onTap;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: enabled ? onTap : null,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          height: 42,
+          decoration: BoxDecoration(
+            gradient: active
+                ? const LinearGradient(
+                    colors: [Color(0xFF00E9F8), Color(0xFF0D7BE1)],
+                  )
+                : null,
+            borderRadius: BorderRadius.circular(35),
+            color: active ? null : Colors.transparent,
+          ),
+          alignment: Alignment.center,
+          foregroundDecoration: enabled
+              ? null
+              : BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.35),
+                  borderRadius: BorderRadius.circular(35),
+                ),
+          child: child,
         ),
-        const SizedBox(height: 8),
-        Text(
-          'This feature is turned off while Transfa completes face verification support.',
-          textAlign: TextAlign.center,
-          style: AppTypography.bodyMuted,
-        ),
-        const SizedBox(height: 28),
-        FilledButton.icon(
-          onPressed: null,
-          icon: const Icon(Icons.camera_alt_rounded),
-          label: const Text('Scan profile to pay'),
-        ),
-        const Spacer(),
-        Text(
-          'No camera permission is requested while CashDrop is disabled.',
-          textAlign: TextAlign.center,
-          style: AppTypography.caption,
-        ),
-      ],
+      ),
     );
   }
 }

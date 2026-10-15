@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:transfa/features/pop-ups/businessBanking_popup.dart';
 import 'package:transfa/features/pop-ups/personalBanking_popup.dart';
 import 'package:transfa/features/pop-ups/transfaAccountPreview_popup.dart';
@@ -10,9 +11,10 @@ import '../../../core/constants/assets.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/utils/formatters.dart';
+import '../../../data/models/transaction.dart';
 import '../../../shared/widgets/glass_card.dart';
 import '../../../shared/widgets/transfa_logo.dart';
-import '../../../features/pop-ups/transfaDone_popup.dart';
 import '../../../features/pop-ups/transfaStatusProgress_popup.dart';
 import '../../../features/pop-ups/transfaStatusUnavailable_popup.dart';
 import '../../../features/pop-ups/transfaStatus_popup.dart';
@@ -384,6 +386,61 @@ class ReceiptReceivedCompanyScreen extends ConsumerWidget {
   }
 }
 
+/// Live transfer receipt using the values returned by the transfer API.
+class TransferReceiptScreen extends StatelessWidget {
+  const TransferReceiptScreen({
+    super.key,
+    required this.transaction,
+    required this.recipientName,
+    required this.accountNumber,
+    required this.bankName,
+    required this.memo,
+  });
+
+  final AppTransaction transaction;
+  final String recipientName;
+  final String accountNumber;
+  final String bankName;
+  final String memo;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = switch (transaction.status) {
+      TxStatus.success => _ReceiptStatus.done,
+      TxStatus.pending => _ReceiptStatus.processing,
+      TxStatus.failed => _ReceiptStatus.unable,
+    };
+    final total = transaction.totalDebit > 0
+        ? transaction.totalDebit
+        : transaction.amount + transaction.fee;
+    return _ReceiptPage(
+      amount: AppFormat.ngn(transaction.amount),
+      amountColor: transaction.status == TxStatus.pending
+          ? const Color(0xFFFF9F0A)
+          : Colors.black,
+      subtitle: transaction.status == TxStatus.failed
+          ? 'Transfer could not be sent'
+          : transaction.status == TxStatus.pending
+          ? 'Transfer is processing'
+          : 'Sent to $recipientName',
+      recipient: _ReceiptRecipient(
+        name: recipientName,
+        avatarColor: const Color(0xFF16A34A),
+      ),
+      memo: memo.isEmpty ? 'Naira transfer' : memo,
+      status: status,
+      transactionFee: '${AppFormat.ngn(transaction.fee)} Fee',
+      total: AppFormat.ngn(total),
+      supportStyle: _ReceiptSupportStyle.row,
+      showShare: transaction.status == TxStatus.success,
+      bankName: bankName,
+      accountNumber: accountNumber,
+      createdAt: transaction.createdAt,
+      transactionReference: transaction.reference ?? transaction.id,
+    );
+  }
+}
+
 // =============================================================
 //  Shared receipt page scaffold + sub-widgets
 // =============================================================
@@ -427,6 +484,8 @@ class _ReceiptPage extends StatelessWidget {
   final bool showPaidWith;
   final String? bankName;
   final String? accountNumber;
+  final DateTime? createdAt;
+  final String? transactionReference;
 
   const _ReceiptPage({
     required this.amount,
@@ -445,6 +504,8 @@ class _ReceiptPage extends StatelessWidget {
     this.showPaidWith = true,
     this.bankName,
     this.accountNumber,
+    this.createdAt,
+    this.transactionReference,
   });
 
   void _showProgressPopup(BuildContext context) {
@@ -640,7 +701,11 @@ class _ReceiptPage extends StatelessWidget {
                   ),
                 ],
                 const SizedBox(height: 50),
-                _DetailStripe(showPaidWith: showPaidWith),
+                _DetailStripe(
+                  showPaidWith: showPaidWith,
+                  createdAt: createdAt,
+                  transactionReference: transactionReference,
+                ),
                 const SizedBox(height: 22),
                 GestureDetector(
                   onTap: () => (context.push(Routes.supportChat)),
@@ -1009,7 +1074,13 @@ class _StampDutyRow extends StatelessWidget {
 /// Paid with rows. Shared by every receipt variant.
 class _DetailStripe extends StatelessWidget {
   final bool showPaidWith;
-  const _DetailStripe({this.showPaidWith = true});
+  final DateTime? createdAt;
+  final String? transactionReference;
+  const _DetailStripe({
+    this.showPaidWith = true,
+    this.createdAt,
+    this.transactionReference,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1021,19 +1092,23 @@ class _DetailStripe extends StatelessWidget {
           _DetailRow(
             icon: _PinkClockIcon(),
             label: 'Time',
-            value: '4:20:00 AM',
+            value: createdAt == null
+                ? '—'
+                : DateFormat('h:mm:ss a').format(createdAt!.toLocal()),
           ),
           const Divider(color: Color(0xFFE6E6E8), height: 1),
           _DetailRow(
             icon: const _DayBadge(),
             label: 'Day',
-            value: 'Sunday, March 10',
+            value: createdAt == null
+                ? '—'
+                : DateFormat('EEEE, MMMM d').format(createdAt!.toLocal()),
           ),
           const Divider(color: Color(0xFFE6E6E8), height: 1),
           _DetailRow(
             icon: const _TransactionIdIcon(),
             label: 'Transaction ID',
-            value: 'TRFA-2104-0801',
+            value: transactionReference ?? '—',
           ),
           if (showPaidWith) ...[
             const Divider(color: Color(0xFFE6E6E8), height: 1),

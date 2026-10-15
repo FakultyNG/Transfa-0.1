@@ -1,249 +1,202 @@
-import 'dart:ui';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../core/theme/app_colors.dart';
+
 import '../../../core/constants/assets.dart';
 import '../../../core/router/routes.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/utils/error_messages.dart';
+import '../../../data/models/support.dart';
+import '../../../data/repositories/repositories.dart';
+import '../../../shared/widgets/homeFab.dart';
 import 'memo_chat_screen.dart';
 
-/// "Air Support" — lockscreen-style chat anchored to a specific transaction.
-/// Header card uses the blue Transfa Support tile; a frosted transaction
-/// card (avatar + "New Money" + amount + green down-arrow) sits underneath
-/// it, followed by chat bubbles and the standard compose pill. Bottom row
-/// has a receipt button (left) and an active green send (right).
-class SupportChatScreen extends StatefulWidget {
+/// Original Transfa support chat UI backed by the live support API.
+class SupportChatScreen extends ConsumerStatefulWidget {
   const SupportChatScreen({super.key});
 
   @override
-  State<SupportChatScreen> createState() => _SupportChatScreenState();
+  ConsumerState<SupportChatScreen> createState() => _SupportChatScreenState();
 }
 
-class _SupportChatScreenState extends State<SupportChatScreen> {
+class _SupportChatScreenState extends ConsumerState<SupportChatScreen> {
   final _input = TextEditingController();
+  final _scroll = ScrollController();
+  Timer? _poller;
+  List<SupportMessage> _messages = const [];
+  SupportTicket? _activeTicket;
+  bool _loading = true;
+  bool _sending = false;
+  String? _error;
 
-  static const _messages = <ChatMsg>[
-    ChatMsg(ChatAuthor.me, "I've got no idea who sent this."),
-    ChatMsg(ChatAuthor.me, 'Good morning.'),
-    ChatMsg(ChatAuthor.agent, 'Hmm. Great intuition.'),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _input.addListener(_inputChanged);
+    _loadConversation();
+    _poller = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _loadConversation(silent: true),
+    );
+  }
+
+  void _inputChanged() => setState(() {});
+
+  Future<void> _loadConversation({bool silent = false}) async {
+    if (!silent && mounted) setState(() => _loading = true);
+    try {
+      final repository = ref.read(supportRepositoryProvider);
+      final tickets = await repository.list();
+      final detailed = await Future.wait(
+        tickets.map((ticket) => repository.get(ticket.id)),
+      );
+      final messages = detailed.expand((ticket) => ticket.messages).toList()
+        ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+      final open = detailed.where((ticket) => ticket.status != 'closed');
+      if (!mounted) return;
+      setState(() {
+        _messages = messages;
+        _activeTicket = open.isEmpty ? null : open.first;
+        _error = null;
+        _loading = false;
+      });
+      _scrollToLatest();
+    } catch (error) {
+      if (!mounted || silent) return;
+      setState(() {
+        _error = userFacingError(error);
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _send() async {
+    final message = _input.text.trim();
+    if (message.isEmpty || _sending) return;
+    setState(() => _sending = true);
+    try {
+      final repository = ref.read(supportRepositoryProvider);
+      final active = _activeTicket;
+      if (active == null) {
+        await repository.create(
+          subject: 'Support conversation',
+          message: message,
+          category: 'general',
+        );
+      } else {
+        await repository.reply(id: active.id, message: message);
+      }
+      _input.clear();
+      await _loadConversation(silent: true);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  void _scrollToLatest() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scroll.hasClients) {
+        _scroll.animateTo(
+          _scroll.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
 
   @override
   void dispose() {
+    _poller?.cancel();
+    _input.removeListener(_inputChanged);
     _input.dispose();
+    _scroll.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final canSend = _input.text.trim().isNotEmpty && !_sending;
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 50, 20, 12),
-        child: Column(
-          children: [
-            // Header card - using same configuration as MemoChatScreen
-            const ChatHeaderCard(
-              iconAsset: Assets.appIconSupport,
-              title: 'Transfa Support',
-              subtitle: 'Get the help you need.',
-            ),
-            const SizedBox(height: 18),
-            // Transaction card with same padding as chat bubbles
-            const _NewMoneyCard(),
-            const SizedBox(height: 18),
-            Expanded(
-              child: ListView.builder(
-                padding: EdgeInsets.zero,
-                itemCount: _messages.length,
-                itemBuilder: (_, i) => ChatBubble(msg: _messages[i]),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+          child: Column(
+            children: [
+              const ChatHeaderCard(
+                iconAsset: Assets.appIconSupport,
+                title: 'Transfa Support',
+                subtitle: 'Get the help you need.',
               ),
-            ),
-            const SizedBox(height: 8),
-            ChatComposeField(controller: _input),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _ReceiptFab(onTap: () => context.push(Routes.receiptStatus)),
-                ChatSendFab(onTap: () => _input.clear(), active: true),
-              ],
-            ),
-          ],
+              const SizedBox(height: 18),
+              Expanded(child: _conversation()),
+              const SizedBox(height: 8),
+              ChatComposeField(controller: _input),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  HomeFab(onTap: () => context.go(Routes.dashboard)),
+                  ChatSendFab(onTap: canSend ? _send : () {}, active: canSend),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
-}
 
-/// Frosted transaction card: avatar + "New Money / Magic Payma" + strike-
-/// through amount + green down-arrow (received indicator / quick action).
-class _NewMoneyCard extends StatelessWidget {
-  const _NewMoneyCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(35),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(24, 18, 24, 20),
-        decoration: BoxDecoration(
-          color: const Color(0x1AFCFCFB),
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
-        ),
+  Widget _conversation() {
+    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_error != null) {
+      return Center(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              children: [
-                const CircleAvatar(
-                  radius: 26,
-                  backgroundImage: AssetImage(Assets.magic),
-                  backgroundColor: Colors.grey,
-                ),
-                const SizedBox(width: 14),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'New Money',
-                      style: AppTypography.body.copyWith(
-                        color: AppColors.success,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    Text(
-                      'Magic Payma',
-                      style: AppTypography.displayMedium.copyWith(
-                        color: Colors.black,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 24,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 28),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Text(
-                  '₦250,000',
-                  style: AppTypography.displayLarge.copyWith(
-                    color: Colors.black,
-                    fontSize: 34,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const Spacer(),
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: AppColors.success,
-                    shape: BoxShape.circle,
-                  ),
-                  alignment: Alignment.center,
-                  child: const Icon(
-                    Icons.arrow_downward_rounded,
-                    color: Colors.white,
-                    size: 22,
-                  ),
-                ),
-              ],
+            Text(_error!, textAlign: TextAlign.center),
+            TextButton(
+              onPressed: _loadConversation,
+              child: const Text('Try again'),
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// Frosted circle with the receipt-bubble glyph — opens the receipt for
-/// the transaction the chat is anchored to.
-class _ReceiptFab extends StatelessWidget {
-  final VoidCallback onTap;
-  const _ReceiptFab({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 56,
-        height: 56,
-        child: SvgPicture.asset(
-          Assets.receiptBubbleDark,
-          width: 56,
-          height: 56,
-          fit: BoxFit.contain,
+      );
+    }
+    if (_messages.isEmpty) {
+      return Center(
+        child: Text(
+          'Send us a message whenever you need help.',
+          textAlign: TextAlign.center,
+          style: AppTypography.bodyMuted,
         ),
-      ),
-    );
-  }
-}
-
-class SupportChatHeaderCard extends StatelessWidget {
-  final String iconAsset;
-  final String title;
-  final String subtitle;
-  const SupportChatHeaderCard({
-    super.key,
-    required this.iconAsset,
-    required this.title,
-    required this.subtitle,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(35),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(24, 18, 24, 20),
-        decoration: BoxDecoration(
-          color: const Color(0x1AFCFCFB),
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.start,
-          children: [
-            SizedBox(
-              width: 56,
-              height: 56,
-              child: Image.asset(iconAsset, fit: BoxFit.contain),
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: _loadConversation,
+      child: ListView.builder(
+        controller: _scroll,
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.zero,
+        itemCount: _messages.length,
+        itemBuilder: (_, index) {
+          final message = _messages[index];
+          return ChatBubble(
+            msg: ChatMsg(
+              message.sender == 'user' ? ChatAuthor.me : ChatAuthor.agent,
+              message.message,
             ),
-            const SizedBox(width: 14),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: AppTypography.displayMedium.copyWith(
-                    color: Colors.black,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 28,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: AppTypography.body.copyWith(
-                    color: Colors.black,
-                    fontSize: 18,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }

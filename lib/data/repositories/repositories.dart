@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/config/app_config.dart';
 import '../api/api_client.dart';
 import '../api/api_exception.dart';
+import '../api/device_identity.dart';
 import '../api/rest_transfa_api.dart';
 import '../api/session_store.dart';
 import '../api/transfa_api.dart';
@@ -207,6 +208,7 @@ class WalletRepository {
   Future<WalletSummary> summary() => _api.getWalletSummary();
   Future<AppTransaction> verifyFunding(String reference) =>
       _api.verifyFunding(reference);
+  Future<DedicatedVirtualAccount> createDva() => _api.createDva();
   Future<DedicatedVirtualAccount> dva() async {
     try {
       return await _api.getDva();
@@ -309,7 +311,8 @@ class TransferRepository {
 
   Future<AppTransaction> confirm({
     required TransferQuote quote,
-    required String passcode,
+    String? passcode,
+    String? biometricDeviceId,
     required String recipientName,
     String? recipientAccount,
     String? bankName,
@@ -317,6 +320,7 @@ class TransferRepository {
   }) => _api.confirmTransfer(
     quote: quote,
     passcode: passcode,
+    biometricDeviceId: biometricDeviceId,
     recipientName: recipientName,
     recipientAccount: recipientAccount,
     bankName: bankName,
@@ -466,7 +470,8 @@ class DeviceFeaturesRepository {
   DeviceFeaturesRepository(this._api);
   final TransfaApi _api;
 
-  Future<BiometricStatus> biometricStatus() => _api.getBiometricStatus();
+  Future<BiometricStatus> biometricStatus() async =>
+      _api.getBiometricStatus(await DeviceIdentity().getOrCreate());
   Future<BiometricStatus> enableBiometric({
     required String method,
     required String deviceId,

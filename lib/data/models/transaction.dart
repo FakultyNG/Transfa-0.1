@@ -40,6 +40,9 @@ class AppTransaction {
   final TxStatus status;
   final TxCurrency currency;
   final double amount;
+  final double fee;
+  final double totalDebit;
+  final String? reference;
   final double? ngnAmount;
   final String counterpartyName;
   final String? counterpartyAccount;
@@ -56,6 +59,9 @@ class AppTransaction {
     required this.counterpartyName,
     required this.createdAt,
     this.ngnAmount,
+    this.fee = 0,
+    this.totalDebit = 0,
+    this.reference,
     this.counterpartyAccount,
     this.bankName,
     this.memo,
@@ -67,6 +73,11 @@ class AppTransaction {
     status: _txStatus(json['status']),
     currency: _txCurrency(json['currency']),
     amount: _asDouble(json['amount']),
+    fee: _optionalDouble(json['fee']),
+    totalDebit: _optionalDouble(
+      json['totalDebit'] ?? json['total_debit'] ?? json['amount'],
+    ),
+    reference: json['reference']?.toString(),
     ngnAmount: json['ngn_amount'] == null && json['ngnAmount'] == null
         ? null
         : _asDouble(json['ngn_amount'] ?? json['ngnAmount']),
@@ -81,7 +92,7 @@ class AppTransaction {
         (json['counterparty_account'] ?? json['counterpartyAccount'])
             ?.toString(),
     bankName: (json['bank_name'] ?? json['bankName'])?.toString(),
-    memo: json['memo']?.toString(),
+    memo: (json['memo'] ?? json['narration'])?.toString(),
     createdAt:
         DateTime.tryParse(
           (json['created_at'] ?? json['createdAt'] ?? '').toString(),
@@ -95,6 +106,9 @@ class AppTransaction {
     'status': status.name,
     'currency': currency.name.toUpperCase(),
     'amount': amount,
+    'fee': fee,
+    'totalDebit': totalDebit,
+    if (reference != null) 'reference': reference,
     if (ngnAmount != null) 'ngn_amount': ngnAmount,
     'counterparty_name': counterpartyName,
     if (counterpartyAccount != null)

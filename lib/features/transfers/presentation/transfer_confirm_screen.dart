@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:local_auth/local_auth.dart';
 
 import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
@@ -9,10 +10,11 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../../data/models/transaction.dart';
+import '../../../data/api/device_identity.dart';
 import '../../../data/repositories/repositories.dart';
-import '../../../shared/widgets/app_input.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 import '../../../shared/widgets/primary_button.dart';
+import 'receipt_screens.dart';
 import 'transfer_state.dart';
 
 class TransferConfirmScreen extends ConsumerStatefulWidget {
@@ -25,22 +27,105 @@ class TransferConfirmScreen extends ConsumerStatefulWidget {
 
 class _TransferConfirmScreenState extends ConsumerState<TransferConfirmScreen> {
   bool _loading = false;
-  final _passcode = TextEditingController();
 
-  @override
-  void dispose() {
-    _passcode.dispose();
-    super.dispose();
-  }
-
-  Future<void> _confirm() async {
+  Future<void> _authorizeAndConfirm() async {
+    if (_loading) return;
     setState(() => _loading = true);
     try {
-      final draft = ref.read(transferDraftProvider);
+      final deviceId = await DeviceIdentity().getOrCreate();
+      final serverStatus = await ref
+          .read(deviceFeaturesRepositoryProvider)
+          .biometricStatus();
+      final localAuth = LocalAuthentication();
+      final available = await localAuth.canCheckBiometrics;
+      if (serverStatus.enabled && available) {
+        final authenticated = await localAuth.authenticate(
+          localizedReason: 'Authorize this Transfa payment',
+          biometricOnly: true,
+        );
+        if (authenticated) {
+          await _confirm(biometricDeviceId: deviceId);
+          return;
+        }
+      }
+    } catch (_) {
+      // Any unavailable or cancelled biometric prompt falls back to PIN.
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+    if (!mounted) return;
+    final pin = await _requestPin();
+    if (pin != null) await _confirm(passcode: pin);
+  }
+
+  Future<String?> _requestPin() async {
+    final controller = TextEditingController();
+    final value = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+      ),
+      builder: (context) => Padding(
+        padding: EdgeInsets.fromLTRB(
+          20,
+          24,
+          20,
+          MediaQuery.viewInsetsOf(context).bottom + 24,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Enter your PIN', style: AppTypography.headingLarge),
+            const SizedBox(height: 8),
+            Text(
+              'Use your 5-digit transaction PIN to authorize this payment.',
+              style: AppTypography.bodyMuted,
+            ),
+            const SizedBox(height: 20),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              obscureText: true,
+              keyboardType: TextInputType.number,
+              maxLength: 5,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: const InputDecoration(labelText: 'Transaction PIN'),
+              onSubmitted: (value) {
+                if (value.length == 5) Navigator.pop(context, value);
+              },
+            ),
+            const SizedBox(height: 12),
+            ValueListenableBuilder<TextEditingValue>(
+              valueListenable: controller,
+              builder: (context, value, _) {
+                return PrimaryButton(
+                  label: 'Authorize payment',
+                  onPressed: value.text.length == 5
+                      ? () => Navigator.pop(context, controller.text)
+                      : null,
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+    controller.dispose();
+    return value;
+  }
+
+  Future<void> _confirm({String? passcode, String? biometricDeviceId}) async {
+    setState(() => _loading = true);
+    final draft = ref.read(transferDraftProvider);
+    try {
       final repo = ref.read(transferRepositoryProvider);
       final tx = await repo.confirm(
         quote: draft.quote!,
-        passcode: _passcode.text,
+        passcode: passcode,
+        biometricDeviceId: biometricDeviceId,
         recipientName: draft.recipientName!,
         recipientAccount: draft.recipientAccount,
         bankName: draft.bankName,
@@ -51,21 +136,53 @@ class _TransferConfirmScreenState extends ConsumerState<TransferConfirmScreen> {
       if (mounted) await _showStatusSheet(tx);
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
+      final quote = draft.quote!;
+      final failed = AppTransaction(
+        id: quote.quoteId,
+        type: TxType.debit,
+        status: TxStatus.failed,
+        currency: quote.currency,
+        amount: quote.amount,
+        fee: quote.fee,
+        totalDebit: quote.total,
+        counterpartyName: draft.recipientName ?? 'Recipient',
+        counterpartyAccount: draft.recipientAccount,
+        bankName: draft.bankName,
+        memo: draft.memo,
+        createdAt: DateTime.now(),
+      );
+      await _showStatusSheet(failed, errorMessage: userFacingError(error));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  Future<void> _showStatusSheet(AppTransaction tx) async {
-    await showModalBottomSheet(
+  Future<void> _showStatusSheet(
+    AppTransaction tx, {
+    String? errorMessage,
+  }) async {
+    final viewReceipt = await showModalBottomSheet<bool>(
       context: context,
       backgroundColor: Colors.transparent,
       isDismissible: false,
-      builder: (_) => _StatusSheet(tx: tx),
+      builder: (_) => _StatusSheet(tx: tx, errorMessage: errorMessage),
     );
+    if (!mounted) return;
+    if (viewReceipt == true) {
+      final draft = ref.read(transferDraftProvider);
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => TransferReceiptScreen(
+            transaction: tx,
+            recipientName: draft.recipientName ?? tx.counterpartyName,
+            accountNumber:
+                draft.recipientAccount ?? tx.counterpartyAccount ?? '—',
+            bankName: draft.bankName ?? tx.bankName ?? '—',
+            memo: draft.memo ?? tx.memo ?? '',
+          ),
+        ),
+      );
+    }
     if (!mounted) return;
     ref.read(transferDraftProvider.notifier).state = const TransferDraft();
     context.go(Routes.dashboard);
@@ -155,21 +272,10 @@ class _TransferConfirmScreenState extends ConsumerState<TransferConfirmScreen> {
             ),
           ),
           const Spacer(),
-          AppInput(
-            label: 'Transaction passcode',
-            hint: '5 digits',
-            controller: _passcode,
-            keyboardType: TextInputType.number,
-            formatters: [FilteringTextInputFormatter.digitsOnly],
-            obscure: true,
-            maxLength: 5,
-            onChanged: (_) => setState(() {}),
-          ),
-          const SizedBox(height: 16),
           PrimaryButton(
-            label: 'Confirm & send',
+            label: 'Touch to Confirm',
             loading: _loading,
-            onPressed: _passcode.text.length == 5 ? _confirm : null,
+            onPressed: _authorizeAndConfirm,
           ),
           const SizedBox(height: 12),
         ],
@@ -203,7 +309,8 @@ class _Row extends StatelessWidget {
 
 class _StatusSheet extends StatelessWidget {
   final AppTransaction tx;
-  const _StatusSheet({required this.tx});
+  final String? errorMessage;
+  const _StatusSheet({required this.tx, this.errorMessage});
 
   @override
   Widget build(BuildContext context) {
@@ -266,12 +373,19 @@ class _StatusSheet extends StatelessWidget {
                 ? 'Your money has been sent successfully.'
                 : pending
                 ? 'Your transfer was submitted. We will notify you when it completes.'
-                : 'Something went wrong. Please try again.',
+                : errorMessage ?? 'Something went wrong. Please try again.',
             textAlign: TextAlign.center,
             style: AppTypography.bodyMuted,
           ),
           const SizedBox(height: 24),
-          PrimaryButton(label: 'Done', onPressed: () => Navigator.pop(context)),
+          PrimaryButton(
+            label: 'View receipt',
+            onPressed: () => Navigator.pop(context, true),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Done'),
+          ),
         ],
       ),
     );

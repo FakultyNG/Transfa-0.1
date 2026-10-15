@@ -9,6 +9,7 @@ class AppUser {
   final String? walletStatus;
   final String? dateOfBirth;
   final String? gender;
+  final String? country;
 
   const AppUser({
     required this.id,
@@ -21,6 +22,7 @@ class AppUser {
     this.walletStatus,
     this.dateOfBirth,
     this.gender,
+    this.country,
   });
 
   factory AppUser.fromJson(Map<String, dynamic> json) => AppUser(
@@ -39,11 +41,14 @@ class AppUser {
         json['is_verified'] == true ||
         json['isVerified'] == true ||
         json['kycStatus'] == 'verified',
-    avatarUrl: (json['avatar_url'] ?? json['avatarUrl'])?.toString(),
+    avatarUrl:
+        (json['profileImageUrl'] ?? json['avatar_url'] ?? json['avatarUrl'])
+            ?.toString(),
     kycStatus: json['kycStatus']?.toString(),
     walletStatus: json['walletStatus']?.toString(),
     dateOfBirth: json['dateOfBirth']?.toString(),
     gender: json['gender']?.toString(),
+    country: json['country']?.toString(),
   );
 
   AppUser copyWith({
@@ -56,6 +61,7 @@ class AppUser {
     String? walletStatus,
     String? dateOfBirth,
     String? gender,
+    String? country,
   }) => AppUser(
     id: id,
     fullName: fullName ?? this.fullName,
@@ -67,6 +73,7 @@ class AppUser {
     walletStatus: walletStatus ?? this.walletStatus,
     dateOfBirth: dateOfBirth ?? this.dateOfBirth,
     gender: gender ?? this.gender,
+    country: country ?? this.country,
   );
 
   Map<String, dynamic> toJson() => {
@@ -80,5 +87,6 @@ class AppUser {
     if (walletStatus != null) 'walletStatus': walletStatus,
     if (dateOfBirth != null) 'dateOfBirth': dateOfBirth,
     if (gender != null) 'gender': gender,
+    if (country != null) 'country': country,
   };
 }

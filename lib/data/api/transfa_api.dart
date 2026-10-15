@@ -114,7 +114,8 @@ abstract interface class TransfaApi {
   });
   Future<AppTransaction> confirmTransfer({
     required TransferQuote quote,
-    required String passcode,
+    String? passcode,
+    String? biometricDeviceId,
     required String recipientName,
     String? recipientAccount,
     String? bankName,
@@ -165,7 +166,7 @@ abstract interface class TransfaApi {
     required String dateOfBirth,
   });
 
-  Future<BiometricStatus> getBiometricStatus();
+  Future<BiometricStatus> getBiometricStatus(String deviceId);
   Future<BiometricStatus> enableBiometric({
     required String method,
     required String deviceId,
