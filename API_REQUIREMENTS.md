@@ -16,6 +16,14 @@ flutter run --dart-define=API_BASE_URL=https://api.transfaintel.xyz
 Authenticated requests send `Authorization: Bearer <access_token>`. Responses
 use the contract's `{ success, message, data }` envelope and camelCase fields.
 
+## Registration And OTP
+
+`POST /api/v1/auth/register/start` now creates/reuses the temporary registration
+session and sends the first OTP in one request. Its data includes
+`registrationToken`, `phoneNumber`, `requiresOtp`, and `otpReference`. The app
+must not call `/auth/otp/send` immediately afterward. `/auth/otp/resend` remains
+the explicit retry route after the initial challenge.
+
 ## Integrated Domains
 
 - Registration, OTP, BVN/optional selfie KYC, KYC status, login/logout, token refresh,
@@ -62,7 +70,9 @@ Expected data:
 ```json
 {
   "featureEnabled": false,
-  "kycSelfieRequired": false
+  "kycSelfieRequired": false,
+  "selfieCountdownEnabled": true,
+  "selfieCountdownSeconds": 5
 }
 ```
 
@@ -72,6 +82,13 @@ Frontend behavior:
   permission for CashDrop scan/register.
 - If `kycSelfieRequired=false`, skip the BVN selfie camera step and continue to
   PIN creation/registration completion after BVN verification.
+- If `selfieCountdownEnabled=true`, display `selfieCountdownSeconds` before
+  automatically capturing the selfie. If disabled, capture as soon as the
+  camera is ready.
+- A failed face match may be retried with the same `registrationToken` and
+  `kycReference`; backend retains the verified BVN only until success or session
+  expiry. The retry action must reset the captured image, verification state,
+  timer, and camera preview.
 - `GET /api/v1/cash-drop/status` also returns `featureEnabled`; when disabled
   it returns `status: "disabled_by_config"`.
 

@@ -13,6 +13,18 @@ import 'package:transfa/data/models/wallet.dart';
 
 void main() {
   group('API model serialization', () {
+    test('parses combined registration and OTP start response', () {
+      final start = RegistrationStart.fromJson({
+        'registrationToken': 'reg_123',
+        'phoneNumber': '+2348012345678',
+        'requiresOtp': true,
+        'otpReference': 'otp_123',
+      });
+
+      expect(start.registrationToken, 'reg_123');
+      expect(start.otpReference, 'otp_123');
+    });
+
     test('parses BVN lookup identity details', () {
       final verification = BvnVerification.fromJson({
         'kycReference': 'kyc_123',
@@ -203,10 +215,14 @@ void main() {
       final config = CashDropConfig.fromJson({
         'featureEnabled': false,
         'kycSelfieRequired': false,
+        'selfieCountdownEnabled': true,
+        'selfieCountdownSeconds': 5,
       });
 
       expect(config.featureEnabled, isFalse);
       expect(config.kycSelfieRequired, isFalse);
+      expect(config.selfieCountdownEnabled, isTrue);
+      expect(config.selfieCountdownSeconds, 5);
     });
 
     test('disabled CashDrop config forces status off', () {

@@ -6,6 +6,8 @@ class RegistrationSession {
     this.kycReference,
     this.otpVerified = false,
     this.bvnVerified = false,
+    this.selfieCountdownEnabled = true,
+    this.selfieCountdownSeconds = 5,
   });
 
   final String phoneNumber;
@@ -14,6 +16,8 @@ class RegistrationSession {
   final String? kycReference;
   final bool otpVerified;
   final bool bvnVerified;
+  final bool selfieCountdownEnabled;
+  final int selfieCountdownSeconds;
 
   RegistrationSession copyWith({
     String? phoneNumber,
@@ -22,6 +26,8 @@ class RegistrationSession {
     String? kycReference,
     bool? otpVerified,
     bool? bvnVerified,
+    bool? selfieCountdownEnabled,
+    int? selfieCountdownSeconds,
   }) => RegistrationSession(
     phoneNumber: phoneNumber ?? this.phoneNumber,
     registrationToken: registrationToken ?? this.registrationToken,
@@ -29,6 +35,10 @@ class RegistrationSession {
     kycReference: kycReference ?? this.kycReference,
     otpVerified: otpVerified ?? this.otpVerified,
     bvnVerified: bvnVerified ?? this.bvnVerified,
+    selfieCountdownEnabled:
+        selfieCountdownEnabled ?? this.selfieCountdownEnabled,
+    selfieCountdownSeconds:
+        selfieCountdownSeconds ?? this.selfieCountdownSeconds,
   );
 }
 
@@ -37,6 +47,7 @@ class RegistrationStart {
     required this.registrationToken,
     required this.phoneNumber,
     required this.requiresOtp,
+    required this.otpReference,
   });
 
   factory RegistrationStart.fromJson(Map<String, dynamic> json) =>
@@ -44,11 +55,13 @@ class RegistrationStart {
         registrationToken: json['registrationToken'].toString(),
         phoneNumber: json['phoneNumber'].toString(),
         requiresOtp: json['requiresOtp'] == true,
+        otpReference: json['otpReference'].toString(),
       );
 
   final String registrationToken;
   final String phoneNumber;
   final bool requiresOtp;
+  final String otpReference;
 }
 
 class OtpChallenge {

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:transfa/shared/widgets/animated_dotted_loader.dart';
+import 'package:transfa/shared/widgets/pressable_scale.dart';
 import '../../../core/constants/assets.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
@@ -52,13 +53,12 @@ class _RegisterPhoneScreenState extends ConsumerState<RegisterPhoneScreen> {
     try {
       final repository = ref.read(authRepositoryProvider);
       final start = await repository.startRegistration(enteredNumber);
-      final challenge = await repository.sendOtp(enteredNumber);
       ref
           .read(registrationSessionProvider.notifier)
           .state = RegistrationSession(
-        phoneNumber: challenge.phoneNumber,
+        phoneNumber: start.phoneNumber,
         registrationToken: start.registrationToken,
-        otpReference: challenge.otpReference,
+        otpReference: start.otpReference,
       );
       if (mounted) context.push(Routes.verifyStartkey);
     } catch (error) {
@@ -142,11 +142,12 @@ class _RegisterPhoneScreenState extends ConsumerState<RegisterPhoneScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    _PhoneField(controller: _phone),
+                    _PhoneField(controller: _phone, loading: _loading),
                     const SizedBox(height: 18),
                     _RedLockPill(
                       label: _loading ? 'Please wait' : 'Continue',
-                      onTap: _loading ? () {} : _handleContinue,
+                      loading: _loading,
+                      onTap: _loading ? null : _handleContinue,
                     ),
                   ],
                 ),
@@ -237,7 +238,8 @@ class _GlassWrapper extends StatelessWidget {
 
 class _PhoneField extends StatelessWidget {
   final TextEditingController controller;
-  const _PhoneField({required this.controller});
+  final bool loading;
+  const _PhoneField({required this.controller, required this.loading});
 
   String _formatPhoneNumber(String value) {
     final digits = value.replaceAll(RegExp(r'\s'), '');
@@ -310,7 +312,7 @@ class _PhoneField extends StatelessWidget {
               ),
             ),
           ),
-          const AnimatedDottedLoader(),
+          if (loading) const AnimatedDottedLoader(),
         ],
       ),
     );
@@ -337,27 +339,39 @@ class _PhoneInputFormatter extends TextInputFormatter {
 
 class _RedLockPill extends StatelessWidget {
   final String label;
-  final VoidCallback onTap;
-  const _RedLockPill({required this.label, required this.onTap});
+  final VoidCallback? onTap;
+  final bool loading;
+  const _RedLockPill({
+    required this.label,
+    required this.onTap,
+    required this.loading,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 60,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFFFF4466), Color(0xFFF41E42)],
-          ),
-          borderRadius: BorderRadius.circular(40),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          label,
-          style: AppTypography.subheading.copyWith(
-            color: Colors.white,
-            fontSize: 17,
+    return PressableScale(
+      enabled: onTap != null,
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedOpacity(
+          opacity: loading ? 0.75 : 1,
+          duration: const Duration(milliseconds: 150),
+          child: Container(
+            height: 60,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFFFF4466), Color(0xFFF41E42)],
+              ),
+              borderRadius: BorderRadius.circular(40),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              label,
+              style: AppTypography.subheading.copyWith(
+                color: Colors.white,
+                fontSize: 17,
+              ),
+            ),
           ),
         ),
       ),

@@ -74,6 +74,7 @@ class MockApi implements TransfaApi {
       registrationToken: 'reg_mock_${_rng.nextInt(99999)}',
       phoneNumber: phoneNumber,
       requiresOtp: true,
+      otpReference: 'otp_mock_${_rng.nextInt(99999)}',
     ),
   );
 
@@ -538,7 +539,12 @@ class MockApi implements TransfaApi {
 
   @override
   Future<CashDropConfig> getCashDropConfig() => _delay(
-    const CashDropConfig(featureEnabled: false, kycSelfieRequired: false),
+    const CashDropConfig(
+      featureEnabled: false,
+      kycSelfieRequired: false,
+      selfieCountdownEnabled: true,
+      selfieCountdownSeconds: 5,
+    ),
   );
 
   @override

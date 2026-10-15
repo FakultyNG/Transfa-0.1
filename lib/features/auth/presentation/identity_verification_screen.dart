@@ -41,12 +41,14 @@ class _IdentityVerificationScreenState
   bool _isVerifying = false;
   Timer? _captureTimer;
   CameraController? _cameraController;
+  Future<void>? _cameraInitialization;
   bool _isCameraInitialized = false;
+  int? _countdownRemaining;
 
   @override
   void initState() {
     super.initState();
-    _initCamera();
+    _cameraInitialization = _initCamera();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _showFaceShotPopup();
     });
@@ -98,23 +100,45 @@ class _IdentityVerificationScreenState
   }
 
   void _startAutoCapture() {
+    _captureTimer?.cancel();
+    final session = ref.read(registrationSessionProvider);
+    final countdownEnabled = session?.selfieCountdownEnabled ?? true;
+    final countdownSeconds = (session?.selfieCountdownSeconds ?? 5).clamp(
+      1,
+      10,
+    );
     setState(() {
       _isCapturing = true;
+      _countdownRemaining = countdownEnabled ? countdownSeconds : null;
     });
-    _captureTimer = Timer(const Duration(seconds: 2), () async {
-      await _captureFace();
+    if (!countdownEnabled) {
+      Future<void>.microtask(_captureFace);
+      return;
+    }
+    _captureTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      final remaining = _countdownRemaining ?? 1;
+      if (remaining <= 1) {
+        timer.cancel();
+        setState(() => _countdownRemaining = null);
+        _captureFace();
+      } else {
+        setState(() => _countdownRemaining = remaining - 1);
+      }
     });
   }
 
   Future<void> _captureFace() async {
-    if (_cameraController == null || !_cameraController!.value.isInitialized) {
-      setState(() {
-        _isCapturing = false;
-      });
-      return;
-    }
-
     try {
+      await _cameraInitialization;
+      if (_cameraController == null ||
+          !_cameraController!.value.isInitialized) {
+        if (mounted) setState(() => _isCapturing = false);
+        return;
+      }
       final xFile = await _cameraController!.takePicture();
       final File image = File(xFile.path);
 
@@ -124,6 +148,7 @@ class _IdentityVerificationScreenState
         _isFaceCaptured = true;
         _isCapturing = false;
         _isVerifying = true;
+        _countdownRemaining = null;
       });
 
       _captureTimer?.cancel();
@@ -181,7 +206,40 @@ class _IdentityVerificationScreenState
       context: context,
       barrierDismissible: false,
       barrierColor: Colors.black.withValues(alpha: 0.5),
-      builder: (context) => const FailedPopup(),
+      builder: (context) => FailedPopup(onTryAgain: _retryCapture),
+    );
+  }
+
+  void _retryCapture() {
+    _captureTimer?.cancel();
+    setState(() {
+      _capturedFaceImage = null;
+      _isFaceCaptured = false;
+      _isCapturing = false;
+      _isVerifying = false;
+      _countdownRemaining = null;
+    });
+    _startAutoCapture();
+  }
+
+  Widget _buildCameraPreview() {
+    final controller = _cameraController!;
+    final previewSize = controller.value.previewSize;
+    if (previewSize == null) return const SizedBox.shrink();
+    return ClipOval(
+      child: SizedBox(
+        width: 250,
+        height: 250,
+        child: FittedBox(
+          fit: BoxFit.cover,
+          clipBehavior: Clip.hardEdge,
+          child: SizedBox(
+            width: previewSize.height,
+            height: previewSize.width,
+            child: CameraPreview(controller),
+          ),
+        ),
+      ),
     );
   }
 
@@ -202,7 +260,7 @@ class _IdentityVerificationScreenState
                     children: [
                       AnimatedBuilder(
                         animation: _pulse,
-                        builder: (_, __) => CustomPaint(
+                        builder: (_, _) => CustomPaint(
                           size: const Size(320, 320),
                           painter: _DottedFacePainter(
                             progress: _pulse.value,
@@ -217,12 +275,29 @@ class _IdentityVerificationScreenState
                           child: Center(child: CircularProgressIndicator()),
                         )
                       else if (_isCapturing && _isCameraInitialized)
-                        ClipOval(
-                          child: SizedBox(
-                            width: 250,
-                            height: 250,
-                            child: CameraPreview(_cameraController!),
-                          ),
+                        Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            _buildCameraPreview(),
+                            if (_countdownRemaining != null)
+                              Container(
+                                width: 72,
+                                height: 72,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.55),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Text(
+                                  '$_countdownRemaining',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 36,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                          ],
                         )
                       else if (_capturedFaceImage != null)
                         ClipOval(

@@ -1,13 +1,15 @@
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'dart:ui' show ImageFilter;
 
 import '../../../core/constants/assets.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../shared/widgets/pressable_scale.dart';
 
 class FailedPopup extends StatefulWidget {
-  const FailedPopup();
+  const FailedPopup({super.key, required this.onTryAgain});
+
+  final VoidCallback onTryAgain;
 
   @override
   State<FailedPopup> createState() => _FailedPopupState();
@@ -26,12 +28,14 @@ class _FailedPopupState extends State<FailedPopup>
       vsync: this,
       duration: const Duration(milliseconds: 500),
     );
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, -1),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _slideController, curve: Curves.easeOutCubic));
-    _fadeAnimation = Tween<double>(begin: 0, end: 1)
-        .animate(CurvedAnimation(parent: _slideController, curve: Curves.easeOut));
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, -1), end: Offset.zero).animate(
+          CurvedAnimation(parent: _slideController, curve: Curves.easeOutCubic),
+        );
+    _fadeAnimation = Tween<double>(
+      begin: 0,
+      end: 1,
+    ).animate(CurvedAnimation(parent: _slideController, curve: Curves.easeOut));
     _slideController.forward();
   }
 
@@ -86,7 +90,7 @@ class _FailedPopupState extends State<FailedPopup>
                               children: [
                                 // Gray face with not recognized icon
                                 ClipOval(
-                                  child: Container(
+                                  child: SizedBox(
                                     width: 220,
                                     height: 220,
                                     child: Center(
@@ -177,39 +181,38 @@ class _FailedPopupState extends State<FailedPopup>
                           const SizedBox(height: 20),
                           Padding(
                             padding: const EdgeInsets.fromLTRB(30, 0, 30, 30),
-                            child: 
-                                Expanded(
-                                  child: GestureDetector(
-                                     onTap: () {
-                                      Navigator.of(context).pop();
-                                      // Retry capture
-                                      if (Navigator.of(context).mounted) {
-                                        // Go back to retry
-                                      }
-                                    },
-                                    child: Container(
-                                      height: 58,
-                                      decoration: BoxDecoration(
-                                        gradient: const LinearGradient(
-                                          begin: Alignment.topCenter,
-                                          end: Alignment.bottomCenter,
-                                          colors: [AppColors.primaryLight, AppColors.primary],
-                                        ),
-                                        borderRadius: BorderRadius.circular(35),
-                                      ),
-                                      alignment: Alignment.center,
-                                      child: const Text(
-                                        'Try Again',
-                                        style: TextStyle(
-                                          fontFamily: 'Roboto',
-                                          fontSize: 17,
-                                          letterSpacing: 0.02,
-                                          color: Color(0xFFFCFCFB),
-                                        ),
-                                      ),
+                            child: PressableScale(
+                              child: GestureDetector(
+                                onTap: () {
+                                  Navigator.of(context).pop();
+                                  widget.onTryAgain();
+                                },
+                                child: Container(
+                                  height: 58,
+                                  decoration: BoxDecoration(
+                                    gradient: const LinearGradient(
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      colors: [
+                                        AppColors.primaryLight,
+                                        AppColors.primary,
+                                      ],
+                                    ),
+                                    borderRadius: BorderRadius.circular(35),
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: const Text(
+                                    'Try Again',
+                                    style: TextStyle(
+                                      fontFamily: 'Roboto',
+                                      fontSize: 17,
+                                      letterSpacing: 0.02,
+                                      color: Color(0xFFFCFCFB),
                                     ),
                                   ),
                                 ),
+                              ),
+                            ),
                           ),
                         ],
                       ),

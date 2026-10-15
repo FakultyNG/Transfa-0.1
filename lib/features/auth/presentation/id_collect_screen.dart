@@ -15,6 +15,7 @@ import '../../../core/utils/error_messages.dart';
 import '../../../data/models/auth.dart';
 import '../../../data/repositories/repositories.dart';
 import '../../../shared/widgets/glass_card.dart';
+import '../../../shared/widgets/pressable_scale.dart';
 import '../../../features/pop-ups/transfaBankPrivacy_popup.dart';
 
 class IdCollectScreen extends StatefulWidget {
@@ -279,32 +280,34 @@ class _RedContinue extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 60,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [AppColors.primaryLight, AppColors.primary],
-          ),
-          borderRadius: BorderRadius.circular(40),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primary.withValues(alpha: 0.28),
-              blurRadius: 14,
-              offset: const Offset(0, 6),
+    return PressableScale(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          height: 60,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [AppColors.primaryLight, AppColors.primary],
             ),
-          ],
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          'Verify',
-          style: AppTypography.subheading.copyWith(
-            color: Colors.white,
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
+            borderRadius: BorderRadius.circular(40),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withValues(alpha: 0.28),
+                blurRadius: 14,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            'Verify',
+            style: AppTypography.subheading.copyWith(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ),
@@ -590,12 +593,17 @@ class AddBvnScreen extends ConsumerWidget {
           return;
         }
         try {
-          final verification = await ref
+          final verificationFuture = ref
               .read(authRepositoryProvider)
               .verifyBvn(
                 registrationToken: session!.registrationToken!,
                 bvn: enteredNumber,
               );
+          final cashDropConfigFuture = ref
+              .read(deviceFeaturesRepositoryProvider)
+              .cashDropConfig();
+          final verification = await verificationFuture;
+          final cashDropConfig = await cashDropConfigFuture;
           if (!verification.bvnVerified || verification.fullName.isEmpty) {
             throw StateError(
               'BVN lookup did not return the required identity details.',
@@ -605,11 +613,9 @@ class AddBvnScreen extends ConsumerWidget {
               .copyWith(
                 kycReference: verification.kycReference,
                 bvnVerified: verification.bvnVerified,
+                selfieCountdownEnabled: cashDropConfig.selfieCountdownEnabled,
+                selfieCountdownSeconds: cashDropConfig.selfieCountdownSeconds,
               );
-          if (!context.mounted) return;
-          final cashDropConfig = await ref
-              .read(deviceFeaturesRepositoryProvider)
-              .cashDropConfig();
           if (!context.mounted) return;
           await showIdVerificationPopup(
             context,

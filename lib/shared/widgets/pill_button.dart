@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
+import 'pressable_scale.dart';
 
 /// Rounded pill button — used as the standard CTA across the app.
 /// Variants: primary (red gradient), dark, secondary (muted), orange.
@@ -30,36 +31,42 @@ class PillButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final disabled = onPressed == null || loading;
-    return Opacity(
-      opacity: disabled ? 0.55 : 1,
-      child: SizedBox(
-        width: width ?? double.infinity,
-        height: height,
-        child: Material(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(height / 2),
-          child: Ink(
-            decoration: _decoration(),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(height / 2),
-              onTap: disabled ? null : onPressed,
-              child: Center(
-                child: loading
-                    ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.4,
-                          valueColor: AlwaysStoppedAnimation(Colors.white),
+    return PressableScale(
+      enabled: !disabled,
+      child: Opacity(
+        opacity: disabled ? 0.55 : 1,
+        child: SizedBox(
+          width: width ?? double.infinity,
+          height: height,
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(height / 2),
+            child: Ink(
+              decoration: _decoration(),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(height / 2),
+                onTap: disabled ? null : onPressed,
+                child: Center(
+                  child: loading
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.4,
+                            valueColor: AlwaysStoppedAnimation(Colors.white),
+                          ),
+                        )
+                      : Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (leading != null) ...[
+                              leading!,
+                              const SizedBox(width: 12),
+                            ],
+                            Text(label, style: _textStyle()),
+                          ],
                         ),
-                      )
-                    : Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (leading != null) ...[leading!, const SizedBox(width: 12)],
-                          Text(label, style: _textStyle()),
-                        ],
-                      ),
+                ),
               ),
             ),
           ),
