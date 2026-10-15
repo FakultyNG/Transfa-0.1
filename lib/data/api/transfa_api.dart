@@ -51,10 +51,25 @@ abstract interface class TransfaApi {
     required String registrationToken,
     required String bvn,
   });
-  Future<bool> validateBvnSelfie({
+  Future<SelfieVerification> validateBvnSelfie({
     required String registrationToken,
     required String kycReference,
     required String selfieImageBase64,
+  });
+  Future<LivenessSession> startBvnLiveness({
+    required String registrationToken,
+    required String kycReference,
+  });
+  Future<LivenessStatus> getBvnLivenessStatus({
+    required String registrationToken,
+    required String kycReference,
+    required String livenessSessionId,
+  });
+  Future<SelfieVerification> completeBvnLiveness({
+    required String registrationToken,
+    required String kycReference,
+    required String livenessSessionId,
+    required String profileImageBase64,
   });
   Future<Map<String, dynamic>> getKycStatus();
 

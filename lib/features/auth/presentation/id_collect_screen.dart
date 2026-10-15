@@ -615,6 +615,7 @@ class AddBvnScreen extends ConsumerWidget {
                 bvnVerified: verification.bvnVerified,
                 selfieCountdownEnabled: cashDropConfig.selfieCountdownEnabled,
                 selfieCountdownSeconds: cashDropConfig.selfieCountdownSeconds,
+                selfieMode: cashDropConfig.kycSelfieMode,
               );
           if (!context.mounted) return;
           await showIdVerificationPopup(

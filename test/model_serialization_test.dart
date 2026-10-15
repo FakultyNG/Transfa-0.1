@@ -43,6 +43,54 @@ void main() {
       expect(verification.bvnMasked, '*******4321');
     });
 
+    test('parses a rejected selfie match with provider details', () {
+      final verification = SelfieVerification.fromJson({
+        'kycStatus': 'rejected',
+        'faceMatch': false,
+        'confidenceScore': 42,
+        'faceMatchStatus': 'not_matched',
+        'faceMatchReason': 'The selfie did not match the BVN photograph.',
+        'livenessStatus': 'not_checked',
+      });
+
+      expect(verification.isVerified, isFalse);
+      expect(verification.confidenceScore, 42);
+      expect(verification.faceMatchStatus, 'not_matched');
+      expect(
+        verification.faceMatchReason,
+        'The selfie did not match the BVN photograph.',
+      );
+      expect(verification.livenessStatus, 'not_checked');
+    });
+
+    test('parses a hosted liveness session', () {
+      final session = LivenessSession.fromJson({
+        'livenessSessionId': 'live_1',
+        'status': 'pending',
+        'url': 'https://verify.example.com/liveness/live_1',
+        'expiresAt': '2026-10-15T12:30:00.000Z',
+      });
+
+      expect(session.id, 'live_1');
+      expect(session.status, 'pending');
+      expect(session.url, startsWith('https://'));
+      expect(session.expiresAt, isNotNull);
+    });
+
+    test('parses a passed liveness status', () {
+      final status = LivenessStatus.fromJson({
+        'livenessSessionId': 'live_1',
+        'status': 'passed',
+        'score': 96,
+        'reasons': <String>[],
+        'usableForFaceMatch': true,
+      });
+
+      expect(status.status, 'passed');
+      expect(status.score, 96);
+      expect(status.usableForFaceMatch, isTrue);
+    });
+
     test('parses a user response', () {
       final user = AppUser.fromJson({
         'id': 'usr_1',
@@ -215,12 +263,14 @@ void main() {
       final config = CashDropConfig.fromJson({
         'featureEnabled': false,
         'kycSelfieRequired': false,
+        'kycSelfieMode': 'bytid_liveness',
         'selfieCountdownEnabled': true,
         'selfieCountdownSeconds': 5,
       });
 
       expect(config.featureEnabled, isFalse);
       expect(config.kycSelfieRequired, isFalse);
+      expect(config.kycSelfieMode, 'bytid_liveness');
       expect(config.selfieCountdownEnabled, isTrue);
       expect(config.selfieCountdownSeconds, 5);
     });

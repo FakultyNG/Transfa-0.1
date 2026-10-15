@@ -1,4 +1,3 @@
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
@@ -10,8 +9,13 @@ import '../../../../core/router/routes.dart';
 import '../../../../core/theme/app_colors.dart';
 
 class SuccessPopup extends StatefulWidget {
-  final File capturedFaceImage;
-  const SuccessPopup({required this.capturedFaceImage});
+  final File? capturedFaceImage;
+  final String? capturedFaceImageUrl;
+  const SuccessPopup({
+    super.key,
+    this.capturedFaceImage,
+    this.capturedFaceImageUrl,
+  });
 
   @override
   State<SuccessPopup> createState() => SuccessPopupState();
@@ -95,13 +99,18 @@ class SuccessPopupState extends State<SuccessPopup>
                                     width: 220,
                                     height: 220,
                                     decoration: BoxDecoration(
-                                      image: DecorationImage(
-                                        image: FileImage(
-                                          widget.capturedFaceImage,
-                                        ),
-                                        fit: BoxFit.cover,
-                                      ),
+                                      color: const Color(0xFFE9E9E9),
+                                      image: _verifiedFaceImage(),
                                     ),
+                                    child:
+                                        widget.capturedFaceImage == null &&
+                                            widget.capturedFaceImageUrl == null
+                                        ? const Icon(
+                                            Icons.verified_user_rounded,
+                                            size: 96,
+                                            color: AppColors.primary,
+                                          )
+                                        : null,
                                   ),
                                 ),
                                 Positioned(
@@ -226,5 +235,17 @@ class SuccessPopupState extends State<SuccessPopup>
         ),
       ),
     );
+  }
+
+  DecorationImage? _verifiedFaceImage() {
+    final file = widget.capturedFaceImage;
+    if (file != null) {
+      return DecorationImage(image: FileImage(file), fit: BoxFit.cover);
+    }
+    final url = widget.capturedFaceImageUrl;
+    if (url != null && url.isNotEmpty) {
+      return DecorationImage(image: NetworkImage(url), fit: BoxFit.cover);
+    }
+    return null;
   }
 }

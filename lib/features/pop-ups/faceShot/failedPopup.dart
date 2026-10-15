@@ -7,9 +7,14 @@ import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/pressable_scale.dart';
 
 class FailedPopup extends StatefulWidget {
-  const FailedPopup({super.key, required this.onTryAgain});
+  const FailedPopup({
+    super.key,
+    required this.onTryAgain,
+    required this.message,
+  });
 
   final VoidCallback onTryAgain;
+  final String message;
 
   @override
   State<FailedPopup> createState() => _FailedPopupState();
@@ -169,13 +174,17 @@ class _FailedPopupState extends State<FailedPopup>
                             ),
                           ),
                           const SizedBox(height: 6),
-                          const Text(
-                            'Your face was not recognized.',
-                            style: TextStyle(
-                              fontFamily: 'Roboto',
-                              fontSize: 17,
-                              letterSpacing: 0.02,
-                              color: Colors.black,
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 28),
+                            child: Text(
+                              widget.message,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontFamily: 'Roboto',
+                                fontSize: 17,
+                                letterSpacing: 0.02,
+                                color: Colors.black,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 20),

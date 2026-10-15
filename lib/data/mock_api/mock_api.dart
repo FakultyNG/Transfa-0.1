@@ -158,11 +158,63 @@ class MockApi implements TransfaApi {
   );
 
   @override
-  Future<bool> validateBvnSelfie({
+  Future<SelfieVerification> validateBvnSelfie({
     required String registrationToken,
     required String kycReference,
     required String selfieImageBase64,
-  }) => _delay(selfieImageBase64.isNotEmpty);
+  }) => _delay(
+    SelfieVerification(
+      kycStatus: selfieImageBase64.isNotEmpty ? 'verified' : 'rejected',
+      faceMatch: selfieImageBase64.isNotEmpty,
+      confidenceScore: selfieImageBase64.isNotEmpty ? 92 : 0,
+      faceMatchStatus: selfieImageBase64.isNotEmpty ? 'matched' : 'unavailable',
+      livenessStatus: 'not_checked',
+    ),
+  );
+
+  @override
+  Future<LivenessSession> startBvnLiveness({
+    required String registrationToken,
+    required String kycReference,
+  }) => _delay(
+    const LivenessSession(
+      id: 'live_mock_1',
+      status: 'pending',
+      url: 'https://verify.example.test/liveness/live_mock_1',
+    ),
+  );
+
+  @override
+  Future<LivenessStatus> getBvnLivenessStatus({
+    required String registrationToken,
+    required String kycReference,
+    required String livenessSessionId,
+  }) => _delay(
+    LivenessStatus(
+      id: livenessSessionId,
+      status: 'passed',
+      reasons: const [],
+      usableForFaceMatch: true,
+      score: 96,
+    ),
+  );
+
+  @override
+  Future<SelfieVerification> completeBvnLiveness({
+    required String registrationToken,
+    required String kycReference,
+    required String livenessSessionId,
+    required String profileImageBase64,
+  }) => _delay(
+    const SelfieVerification(
+      kycStatus: 'verified',
+      faceMatch: true,
+      confidenceScore: 96,
+      faceMatchStatus: 'matched',
+      livenessStatus: 'passed',
+      profileImageUrl: 'https://example.test/profile.jpg',
+    ),
+  );
 
   @override
   Future<Map<String, dynamic>> getKycStatus() => _delay({
@@ -542,6 +594,7 @@ class MockApi implements TransfaApi {
     const CashDropConfig(
       featureEnabled: false,
       kycSelfieRequired: false,
+      kycSelfieMode: 'static',
       selfieCountdownEnabled: true,
       selfieCountdownSeconds: 5,
     ),

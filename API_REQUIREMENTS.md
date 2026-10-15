@@ -48,11 +48,26 @@ when Strowallet is active, fetches BVN details server-side before calling
 Strowallet Verify BVN. The app must not collect or send BVN name/date-of-birth
 fields for this step.
 
-When `kycSelfieRequired=true`, the app sends the captured selfie to the existing
-selfie endpoint with `registrationToken`, `kycReference`, and
-`selfieImageBase64`. Backend uses BytID BVN face match and feeds the BVN number
-plus BVN details from the earlier verification step; the app must not send
-name/date-of-birth fields for selfie KYC.
+When `kycSelfieRequired=true`, behavior is selected by `kycSelfieMode` from the
+feature config. `static` sends the captured image to the existing selfie
+endpoint. `bytid_liveness` captures and retains a front-camera profile image,
+starts `/kyc/bvn/liveness/start`, opens the returned hosted URL, handles the
+`transfa://kyc/liveness-complete` callback, polls
+`/kyc/bvn/liveness/status`, and calls `/kyc/bvn/liveness/complete` only after
+the session is usable. The profile image is for the customer profile and
+CashDrop only; BytID uses `liveness_session_id` to match against the stored BVN.
+
+Every selfie retry keeps the same public `registrationToken` and `kycReference`.
+Backend creates a distinct BytID provider reference per captured image, so the
+mobile app must not generate or send a provider reference. BytID configuration,
+permission, balance, validation, IP allowlist, and rate-limit failures arrive as
+specific `BYTID_*` error codes with a safe root message for the existing error UI.
+
+The selfie response includes `kycStatus`, `faceMatch`, `confidenceScore`,
+`faceMatchStatus`, `faceMatchReason`, and `livenessStatus`. The app must only
+advance when `kycStatus=verified` and `faceMatch=true`. On rejection it displays
+`faceMatchReason`, because a BytID HTTP 200 may still contain `not_matched` or
+`unavailable`. A static selfie normally reports `livenessStatus=not_checked`.
 
 ## CashDrop / Selfie Feature Flags
 
@@ -71,6 +86,7 @@ Expected data:
 {
   "featureEnabled": false,
   "kycSelfieRequired": false,
+  "kycSelfieMode": "bytid_liveness",
   "selfieCountdownEnabled": true,
   "selfieCountdownSeconds": 5
 }
@@ -82,6 +98,8 @@ Frontend behavior:
   permission for CashDrop scan/register.
 - If `kycSelfieRequired=false`, skip the BVN selfie camera step and continue to
   PIN creation/registration completion after BVN verification.
+- If `kycSelfieMode=bytid_liveness`, use the hosted session flow. If it is
+  `static`, use `/kyc/bvn/selfie-validate` with the camera image.
 - If `selfieCountdownEnabled=true`, display `selfieCountdownSeconds` before
   automatically capturing the selfie. If disabled, capture as soon as the
   camera is ready.

@@ -137,7 +137,7 @@ class AuthRepository {
     required String bvn,
   }) => _api.verifyBvn(registrationToken: registrationToken, bvn: bvn);
 
-  Future<bool> validateBvnSelfie({
+  Future<SelfieVerification> validateBvnSelfie({
     required String registrationToken,
     required String kycReference,
     required String selfieImageBase64,
@@ -145,6 +145,33 @@ class AuthRepository {
     registrationToken: registrationToken,
     kycReference: kycReference,
     selfieImageBase64: selfieImageBase64,
+  );
+  Future<LivenessSession> startBvnLiveness({
+    required String registrationToken,
+    required String kycReference,
+  }) => _api.startBvnLiveness(
+    registrationToken: registrationToken,
+    kycReference: kycReference,
+  );
+  Future<LivenessStatus> getBvnLivenessStatus({
+    required String registrationToken,
+    required String kycReference,
+    required String livenessSessionId,
+  }) => _api.getBvnLivenessStatus(
+    registrationToken: registrationToken,
+    kycReference: kycReference,
+    livenessSessionId: livenessSessionId,
+  );
+  Future<SelfieVerification> completeBvnLiveness({
+    required String registrationToken,
+    required String kycReference,
+    required String livenessSessionId,
+    required String profileImageBase64,
+  }) => _api.completeBvnLiveness(
+    registrationToken: registrationToken,
+    kycReference: kycReference,
+    livenessSessionId: livenessSessionId,
+    profileImageBase64: profileImageBase64,
   );
   Future<Map<String, dynamic>> getKycStatus() => _api.getKycStatus();
 }

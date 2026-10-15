@@ -8,6 +8,7 @@ class RegistrationSession {
     this.bvnVerified = false,
     this.selfieCountdownEnabled = true,
     this.selfieCountdownSeconds = 5,
+    this.selfieMode = 'static',
   });
 
   final String phoneNumber;
@@ -18,6 +19,7 @@ class RegistrationSession {
   final bool bvnVerified;
   final bool selfieCountdownEnabled;
   final int selfieCountdownSeconds;
+  final String selfieMode;
 
   RegistrationSession copyWith({
     String? phoneNumber,
@@ -28,6 +30,7 @@ class RegistrationSession {
     bool? bvnVerified,
     bool? selfieCountdownEnabled,
     int? selfieCountdownSeconds,
+    String? selfieMode,
   }) => RegistrationSession(
     phoneNumber: phoneNumber ?? this.phoneNumber,
     registrationToken: registrationToken ?? this.registrationToken,
@@ -39,6 +42,7 @@ class RegistrationSession {
         selfieCountdownEnabled ?? this.selfieCountdownEnabled,
     selfieCountdownSeconds:
         selfieCountdownSeconds ?? this.selfieCountdownSeconds,
+    selfieMode: selfieMode ?? this.selfieMode,
   );
 }
 
@@ -125,4 +129,94 @@ class BvnVerification {
     final text = value.toString().trim();
     return text.isEmpty ? null : text;
   }
+}
+
+class SelfieVerification {
+  const SelfieVerification({
+    required this.kycStatus,
+    required this.faceMatch,
+    required this.confidenceScore,
+    this.faceMatchStatus,
+    this.faceMatchReason,
+    this.livenessStatus,
+    this.profileImageUrl,
+  });
+
+  factory SelfieVerification.fromJson(Map<String, dynamic> json) =>
+      SelfieVerification(
+        kycStatus: json['kycStatus']?.toString() ?? 'rejected',
+        faceMatch: json['faceMatch'] == true,
+        confidenceScore: (json['confidenceScore'] as num?)?.toDouble() ?? 0,
+        faceMatchStatus: _optionalString(json['faceMatchStatus']),
+        faceMatchReason: _optionalString(json['faceMatchReason']),
+        livenessStatus: _optionalString(json['livenessStatus']),
+        profileImageUrl: _optionalString(json['profileImageUrl']),
+      );
+
+  final String kycStatus;
+  final bool faceMatch;
+  final double confidenceScore;
+  final String? faceMatchStatus;
+  final String? faceMatchReason;
+  final String? livenessStatus;
+  final String? profileImageUrl;
+
+  bool get isVerified => faceMatch && kycStatus == 'verified';
+
+  static String? _optionalString(dynamic value) {
+    if (value == null) return null;
+    final text = value.toString().trim();
+    return text.isEmpty ? null : text;
+  }
+}
+
+class LivenessSession {
+  const LivenessSession({
+    required this.id,
+    required this.status,
+    required this.url,
+    this.expiresAt,
+  });
+
+  factory LivenessSession.fromJson(Map<String, dynamic> json) =>
+      LivenessSession(
+        id: json['livenessSessionId'].toString(),
+        status: json['status'].toString(),
+        url: json['url'].toString(),
+        expiresAt: json['expiresAt']?.toString(),
+      );
+
+  final String id;
+  final String status;
+  final String url;
+  final String? expiresAt;
+}
+
+class LivenessStatus {
+  const LivenessStatus({
+    required this.id,
+    required this.status,
+    required this.reasons,
+    required this.usableForFaceMatch,
+    this.score,
+    this.expiresAt,
+  });
+
+  factory LivenessStatus.fromJson(Map<String, dynamic> json) => LivenessStatus(
+    id: json['livenessSessionId'].toString(),
+    status: json['status'].toString(),
+    reasons: (json['reasons'] as List<dynamic>? ?? const [])
+        .map((reason) => reason.toString())
+        .toList(growable: false),
+    usableForFaceMatch: json['usableForFaceMatch'] == true,
+    score: (json['score'] as num?)?.toDouble(),
+    expiresAt: json['expiresAt']?.toString(),
+  );
+
+  final String id;
+  final String status;
+  final List<String> reasons;
+  final bool usableForFaceMatch;
+  final double? score;
+  final String? expiresAt;
 }

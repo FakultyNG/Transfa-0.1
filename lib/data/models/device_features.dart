@@ -17,6 +17,7 @@ class CashDropConfig {
   const CashDropConfig({
     required this.featureEnabled,
     required this.kycSelfieRequired,
+    required this.kycSelfieMode,
     required this.selfieCountdownEnabled,
     required this.selfieCountdownSeconds,
   });
@@ -24,6 +25,7 @@ class CashDropConfig {
   factory CashDropConfig.fromJson(Map<String, dynamic> json) => CashDropConfig(
     featureEnabled: json['featureEnabled'] == true,
     kycSelfieRequired: json['kycSelfieRequired'] == true,
+    kycSelfieMode: json['kycSelfieMode']?.toString() ?? 'static',
     selfieCountdownEnabled: json['selfieCountdownEnabled'] != false,
     selfieCountdownSeconds:
         (json['selfieCountdownSeconds'] as num?)?.toInt() ?? 5,
@@ -31,6 +33,7 @@ class CashDropConfig {
 
   final bool featureEnabled;
   final bool kycSelfieRequired;
+  final String kycSelfieMode;
   final bool selfieCountdownEnabled;
   final int selfieCountdownSeconds;
 }

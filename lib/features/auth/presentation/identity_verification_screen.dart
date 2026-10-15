@@ -2,9 +2,13 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:app_links/app_links.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image/image.dart' as image_lib;
+import 'package:url_launcher/url_launcher.dart';
 import 'dart:io';
 import 'dart:async';
 
@@ -29,7 +33,7 @@ class IdentityVerificationScreen extends ConsumerStatefulWidget {
 
 class _IdentityVerificationScreenState
     extends ConsumerState<IdentityVerificationScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final AnimationController _pulse = AnimationController(
     vsync: this,
     duration: const Duration(seconds: 3),
@@ -44,10 +48,22 @@ class _IdentityVerificationScreenState
   Future<void>? _cameraInitialization;
   bool _isCameraInitialized = false;
   int? _countdownRemaining;
+  StreamSubscription<Uri>? _deepLinkSubscription;
+  Timer? _livenessPollTimer;
+  String? _livenessSessionId;
+  String? _verifiedProfileImageUrl;
+  String? _profileImageBase64;
+  bool _isCheckingLiveness = false;
+  bool _livenessStarted = false;
+
+  bool get _usesLiveness =>
+      ref.read(registrationSessionProvider)?.selfieMode == 'bytid_liveness';
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _deepLinkSubscription = AppLinks().uriLinkStream.listen(_handleDeepLink);
     _cameraInitialization = _initCamera();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _showFaceShotPopup();
@@ -58,8 +74,20 @@ class _IdentityVerificationScreenState
   void dispose() {
     _pulse.dispose();
     _captureTimer?.cancel();
+    _livenessPollTimer?.cancel();
+    _deepLinkSubscription?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     _cameraController?.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed &&
+        _usesLiveness &&
+        _livenessSessionId != null) {
+      _completeLiveness();
+    }
   }
 
   Future<void> _initCamera() async {
@@ -74,15 +102,36 @@ class _IdentityVerificationScreenState
 
     _cameraController = CameraController(
       frontCamera,
-      ResolutionPreset.medium,
+      ResolutionPreset.high,
       enableAudio: false,
+      imageFormatGroup: ImageFormatGroup.jpeg,
     );
 
     await _cameraController!.initialize();
+    await _configureCameraForFaceCapture(_cameraController!);
     if (mounted) {
       setState(() {
         _isCameraInitialized = true;
       });
+    }
+  }
+
+  Future<void> _configureCameraForFaceCapture(
+    CameraController controller,
+  ) async {
+    try {
+      await controller.lockCaptureOrientation(DeviceOrientation.portraitUp);
+    } on CameraException catch (error) {
+      debugPrint('Capture orientation is not supported: $error');
+    }
+    try {
+      await controller.setFlashMode(FlashMode.off);
+      await controller.setFocusMode(FocusMode.auto);
+      await controller.setExposureMode(ExposureMode.auto);
+      await controller.setFocusPoint(const Offset(0.5, 0.5));
+      await controller.setExposurePoint(const Offset(0.5, 0.5));
+    } on CameraException catch (error) {
+      debugPrint('Camera focus/exposure control is not supported: $error');
     }
   }
 
@@ -97,6 +146,132 @@ class _IdentityVerificationScreenState
         _startAutoCapture();
       }
     });
+  }
+
+  Future<void> _startLiveness() async {
+    if (_livenessStarted || _isVerifying) return;
+    final session = ref.read(registrationSessionProvider);
+    if (session?.registrationToken == null || session?.kycReference == null) {
+      _showFailedPopup('KYC session expired. Start registration again.');
+      return;
+    }
+    if (_profileImageBase64 == null) {
+      _showFailedPopup(
+        'Take a profile photo before starting the live face check.',
+      );
+      return;
+    }
+    setState(() {
+      _livenessStarted = true;
+      _isVerifying = true;
+      _isCapturing = false;
+    });
+    try {
+      final liveness = await ref
+          .read(authRepositoryProvider)
+          .startBvnLiveness(
+            registrationToken: session!.registrationToken!,
+            kycReference: session.kycReference!,
+          );
+      _livenessSessionId = liveness.id;
+      final launched = await launchUrl(
+        Uri.parse(liveness.url),
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched) {
+        throw StateError('Could not open the secure BytID face check.');
+      }
+      _livenessPollTimer?.cancel();
+      _livenessPollTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+        _completeLiveness();
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isVerifying = false;
+        _livenessStarted = false;
+      });
+      _showFailedPopup(userFacingError(error));
+    }
+  }
+
+  void _handleDeepLink(Uri uri) {
+    if (uri.scheme != 'transfa' ||
+        uri.host != 'kyc' ||
+        uri.path != '/liveness-complete') {
+      return;
+    }
+    final returnedId = uri.queryParameters['liveness_session_id'];
+    if (returnedId == null || returnedId != _livenessSessionId) return;
+    _completeLiveness();
+  }
+
+  Future<void> _completeLiveness() async {
+    if (_isCheckingLiveness || _livenessSessionId == null) return;
+    final session = ref.read(registrationSessionProvider);
+    if (session?.registrationToken == null || session?.kycReference == null) {
+      return;
+    }
+    _isCheckingLiveness = true;
+    try {
+      final status = await ref
+          .read(authRepositoryProvider)
+          .getBvnLivenessStatus(
+            registrationToken: session!.registrationToken!,
+            kycReference: session.kycReference!,
+            livenessSessionId: _livenessSessionId!,
+          );
+      if (!mounted) return;
+      if (status.status == 'pending') {
+        setState(() => _isVerifying = true);
+        return;
+      }
+      if (status.status != 'passed' || !status.usableForFaceMatch) {
+        _livenessPollTimer?.cancel();
+        setState(() => _isVerifying = false);
+        final details = status.reasons
+            .map((reason) => reason.replaceAll('_', ' '))
+            .join(', ');
+        _showFailedPopup(
+          details.isEmpty
+              ? 'The live face check ${status.status}. Please try again.'
+              : 'The live face check failed: $details.',
+        );
+        return;
+      }
+
+      final verification = await ref
+          .read(authRepositoryProvider)
+          .completeBvnLiveness(
+            registrationToken: session.registrationToken!,
+            kycReference: session.kycReference!,
+            livenessSessionId: _livenessSessionId!,
+            profileImageBase64: _profileImageBase64!,
+          );
+      if (!mounted) return;
+      if (verification.kycStatus == 'pending') {
+        setState(() => _isVerifying = true);
+        return;
+      }
+      _livenessPollTimer?.cancel();
+      setState(() => _isVerifying = false);
+      if (verification.isVerified && verification.livenessStatus == 'passed') {
+        _verifiedProfileImageUrl = verification.profileImageUrl;
+        _showSuccessPopup();
+      } else {
+        _showFailedPopup(
+          verification.faceMatchReason ??
+              _fallbackFailureMessage(verification.faceMatchStatus),
+        );
+      }
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
+    } finally {
+      _isCheckingLiveness = false;
+    }
   }
 
   void _startAutoCapture() {
@@ -157,9 +332,15 @@ class _IdentityVerificationScreenState
       if (session?.registrationToken == null || session?.kycReference == null) {
         throw StateError('KYC session expired. Start registration again.');
       }
-      final bytes = await image.readAsBytes();
+      final bytes = await _normalizedSelfieBytes(image);
       final selfie = 'data:image/jpeg;base64,${base64Encode(bytes)}';
-      final isSuccess = await ref
+      if (_usesLiveness) {
+        _profileImageBase64 = selfie;
+        if (mounted) setState(() => _isVerifying = false);
+        await _startLiveness();
+        return;
+      }
+      final verification = await ref
           .read(authRepositoryProvider)
           .validateBvnSelfie(
             registrationToken: session!.registrationToken!,
@@ -172,10 +353,13 @@ class _IdentityVerificationScreenState
         _isVerifying = false;
       });
 
-      if (isSuccess) {
+      if (verification.isVerified) {
         _showSuccessPopup();
       } else {
-        _showFailedPopup();
+        _showFailedPopup(
+          verification.faceMatchReason ??
+              _fallbackFailureMessage(verification.faceMatchStatus),
+        );
       }
     } catch (error) {
       debugPrint('Error capturing face: $error');
@@ -187,8 +371,42 @@ class _IdentityVerificationScreenState
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
-      _showFailedPopup();
+      _showFailedPopup(userFacingError(error));
     }
+  }
+
+  Future<List<int>> _normalizedSelfieBytes(File image) async {
+    final bytes = await image.readAsBytes();
+    final decoded = image_lib.decodeImage(bytes);
+    if (decoded == null) return bytes;
+
+    var normalized = image_lib.bakeOrientation(decoded);
+    const maximumSide = 1600;
+    if (normalized.width > maximumSide || normalized.height > maximumSide) {
+      if (normalized.width >= normalized.height) {
+        normalized = image_lib.copyResize(normalized, width: maximumSide);
+      } else {
+        normalized = image_lib.copyResize(normalized, height: maximumSide);
+      }
+    }
+    var encoded = image_lib.encodeJpg(normalized, quality: 92);
+    const uploadLimit = 1900 * 1024;
+    if (encoded.length > uploadLimit) {
+      if (normalized.width >= normalized.height && normalized.width > 1280) {
+        normalized = image_lib.copyResize(normalized, width: 1280);
+      } else if (normalized.height > 1280) {
+        normalized = image_lib.copyResize(normalized, height: 1280);
+      }
+      encoded = image_lib.encodeJpg(normalized, quality: 85);
+    }
+    return encoded;
+  }
+
+  String _fallbackFailureMessage(String? status) {
+    if (status == 'unavailable') {
+      return 'No usable face was found in the selfie or BVN record. Keep your full face visible in bright, even lighting and try again.';
+    }
+    return 'The selfie did not match the photograph held against this BVN. Remove glasses or face coverings, face the camera directly, and try again.';
   }
 
   void _showSuccessPopup() {
@@ -196,17 +414,20 @@ class _IdentityVerificationScreenState
       context: context,
       barrierDismissible: false,
       barrierColor: Colors.black.withValues(alpha: 0.5),
-      builder: (context) =>
-          SuccessPopup(capturedFaceImage: _capturedFaceImage!),
+      builder: (context) => SuccessPopup(
+        capturedFaceImage: _capturedFaceImage,
+        capturedFaceImageUrl: _verifiedProfileImageUrl,
+      ),
     );
   }
 
-  void _showFailedPopup() {
+  void _showFailedPopup(String message) {
     showDialog(
       context: context,
       barrierDismissible: false,
       barrierColor: Colors.black.withValues(alpha: 0.5),
-      builder: (context) => FailedPopup(onTryAgain: _retryCapture),
+      builder: (context) =>
+          FailedPopup(onTryAgain: _retryCapture, message: message),
     );
   }
 
@@ -218,6 +439,10 @@ class _IdentityVerificationScreenState
       _isCapturing = false;
       _isVerifying = false;
       _countdownRemaining = null;
+      _livenessSessionId = null;
+      _verifiedProfileImageUrl = null;
+      _profileImageBase64 = null;
+      _livenessStarted = false;
     });
     _startAutoCapture();
   }

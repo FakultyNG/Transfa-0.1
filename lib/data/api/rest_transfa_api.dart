@@ -216,7 +216,7 @@ class RestTransfaApi implements TransfaApi {
   }
 
   @override
-  Future<bool> validateBvnSelfie({
+  Future<SelfieVerification> validateBvnSelfie({
     required String registrationToken,
     required String kycReference,
     required String selfieImageBase64,
@@ -232,7 +232,67 @@ class RestTransfaApi implements TransfaApi {
         allowRefresh: false,
       ),
     );
-    return data['faceMatch'] == true && data['kycStatus'] == 'verified';
+    return SelfieVerification.fromJson(data);
+  }
+
+  @override
+  Future<LivenessSession> startBvnLiveness({
+    required String registrationToken,
+    required String kycReference,
+  }) async {
+    final data = _dataMap(
+      await _client.post(
+        '$_api/kyc/bvn/liveness/start',
+        data: {
+          'registrationToken': registrationToken,
+          'kycReference': kycReference,
+        },
+        allowRefresh: false,
+      ),
+    );
+    return LivenessSession.fromJson(data);
+  }
+
+  @override
+  Future<LivenessStatus> getBvnLivenessStatus({
+    required String registrationToken,
+    required String kycReference,
+    required String livenessSessionId,
+  }) async {
+    final data = _dataMap(
+      await _client.post(
+        '$_api/kyc/bvn/liveness/status',
+        data: {
+          'registrationToken': registrationToken,
+          'kycReference': kycReference,
+          'livenessSessionId': livenessSessionId,
+        },
+        allowRefresh: false,
+      ),
+    );
+    return LivenessStatus.fromJson(data);
+  }
+
+  @override
+  Future<SelfieVerification> completeBvnLiveness({
+    required String registrationToken,
+    required String kycReference,
+    required String livenessSessionId,
+    required String profileImageBase64,
+  }) async {
+    final data = _dataMap(
+      await _client.post(
+        '$_api/kyc/bvn/liveness/complete',
+        data: {
+          'registrationToken': registrationToken,
+          'kycReference': kycReference,
+          'livenessSessionId': livenessSessionId,
+          'profileImageBase64': profileImageBase64,
+        },
+        allowRefresh: false,
+      ),
+    );
+    return SelfieVerification.fromJson(data);
   }
 
   @override
