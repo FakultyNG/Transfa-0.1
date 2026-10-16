@@ -40,14 +40,14 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         ref.read(currentUserProvider.notifier).state = user;
         context.go(Routes.unlockPasscode, extra: user.phone);
       } else {
-        final knownPhone = await ref
-            .read(sessionStoreProvider)
-            .readLastPhoneNumber();
+        final sessionStore = ref.read(sessionStoreProvider);
+        final knownPhone = await sessionStore.readLastPhoneNumber();
+        final completedOnboarding = await sessionStore.hasCompletedOnboarding();
         if (!mounted) return;
+        final returningCustomer =
+            completedOnboarding || (knownPhone?.isNotEmpty ?? false);
         context.go(
-          knownPhone == null || knownPhone.isEmpty
-              ? Routes.welcomeIntro
-              : Routes.welcomeHomePhone,
+          returningCustomer ? Routes.welcomeHomePhone : Routes.welcomeIntro,
           extra: knownPhone,
         );
       }

@@ -78,6 +78,7 @@ class _CreatePinScreenState extends ConsumerState<CreatePinScreen> {
                 registrationToken: session!.registrationToken!,
                 passcode: _first,
               );
+          await ref.read(sessionStoreProvider).markOnboardingCompleted();
           ref.read(currentUserProvider.notifier).state = user;
           ref.read(registrationSessionProvider.notifier).state = null;
           if (!mounted) return;

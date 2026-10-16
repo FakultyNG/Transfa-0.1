@@ -11,8 +11,10 @@ abstract interface class SessionStore {
   Future<String?> readAccessToken();
   Future<String?> readRefreshToken();
   Future<String?> readLastPhoneNumber();
+  Future<bool> hasCompletedOnboarding();
   Future<void> write(AuthSession session);
   Future<void> rememberPhoneNumber(String phoneNumber);
+  Future<void> markOnboardingCompleted();
   Future<void> clear();
 }
 
@@ -23,6 +25,7 @@ class SecureSessionStore implements SessionStore {
   static const _accessTokenKey = 'transfa_access_token';
   static const _refreshTokenKey = 'transfa_refresh_token';
   static const _lastPhoneNumberKey = 'transfa_last_phone_number';
+  static const _onboardingCompletedKey = 'transfa_onboarding_completed';
 
   final FlutterSecureStorage _storage;
 
@@ -37,6 +40,10 @@ class SecureSessionStore implements SessionStore {
       _storage.read(key: _lastPhoneNumberKey);
 
   @override
+  Future<bool> hasCompletedOnboarding() async =>
+      await _storage.read(key: _onboardingCompletedKey) == 'true';
+
+  @override
   Future<void> write(AuthSession session) async {
     await _storage.write(key: _accessTokenKey, value: session.accessToken);
     if (session.refreshToken case final refreshToken?) {
@@ -49,6 +56,10 @@ class SecureSessionStore implements SessionStore {
   @override
   Future<void> rememberPhoneNumber(String phoneNumber) =>
       _storage.write(key: _lastPhoneNumberKey, value: phoneNumber);
+
+  @override
+  Future<void> markOnboardingCompleted() =>
+      _storage.write(key: _onboardingCompletedKey, value: 'true');
 
   @override
   Future<void> clear() async {

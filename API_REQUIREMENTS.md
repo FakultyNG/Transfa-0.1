@@ -24,6 +24,11 @@ session and sends the first OTP in one request. Its data includes
 must not call `/auth/otp/send` immediately afterward. `/auth/otp/resend` remains
 the explicit retry route after the initial challenge.
 
+Registration must stop and display the backend message when either uniqueness
+conflict is returned: `PHONE_NUMBER_ALREADY_REGISTERED` from registration start
+or `BVN_ALREADY_REGISTERED` from BVN verification/completion. The app must not
+continue to OTP or the next KYC screen after either HTTP 409 response.
+
 ## Startup, Unlock, And Recovery
 
 - After onboarding PIN confirmation, the welcome screen remains visible until
@@ -31,8 +36,10 @@ the explicit retry route after the initial challenge.
 - On a later launch, a restorable server session routes to `/unlock/passcode`.
   The submitted five-digit passcode is verified with
   `POST /api/v1/auth/passcode/verify` before Home opens.
-- If no server session can be restored, route to `/unlock/phone` and retain only
-  the last successfully authenticated phone number as a convenience value.
+- Once onboarding completes, persist a non-sensitive completion flag. If no
+  server session can be restored on a later launch, route to `/unlock/phone`.
+  Retain only the last successfully authenticated phone number as a convenience
+  value; clearing expired access/refresh tokens must not clear either value.
 - Passcode recovery requests an OTP with
   `POST /api/v1/auth/passcode/reset/request`, verifies it with
   `/auth/passcode/reset/verify`, and passes the returned `resetToken` into the

@@ -593,17 +593,15 @@ class AddBvnScreen extends ConsumerWidget {
           return;
         }
         try {
-          final verificationFuture = ref
+          final verification = await ref
               .read(authRepositoryProvider)
               .verifyBvn(
                 registrationToken: session!.registrationToken!,
                 bvn: enteredNumber,
               );
-          final cashDropConfigFuture = ref
+          final cashDropConfig = await ref
               .read(deviceFeaturesRepositoryProvider)
               .cashDropConfig();
-          final verification = await verificationFuture;
-          final cashDropConfig = await cashDropConfigFuture;
           if (!verification.bvnVerified || verification.fullName.isEmpty) {
             throw StateError(
               'BVN lookup did not return the required identity details.',
