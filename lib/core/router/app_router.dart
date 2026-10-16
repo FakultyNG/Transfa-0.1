@@ -117,7 +117,16 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       slideRoute(Routes.register, const RegisterPhoneScreen()),
       slideRoute(Routes.login, const LoginScreen()),
       slideRoute(Routes.verifyStartkey, const VerifyStartkeyScreen()),
-      slideRoute(Routes.createPin, const CreatePinScreen()),
+      GoRoute(
+        path: Routes.createPin,
+        pageBuilder: (context, state) => buildPageWithTransition(
+          CreatePinScreen(
+            recovery: state.extra is CreatePinRecoveryArgs
+                ? state.extra as CreatePinRecoveryArgs
+                : null,
+          ),
+        ),
+      ),
       slideRoute(Routes.welcome, const WelcomeScreen()),
 
       //pop-ups
@@ -189,13 +198,37 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       slideRoute(Routes.chooseCountry, const SendMoneyWherePage()),
 
       // Unlock + recovery
-      slideRoute(Routes.faceShotUnlock, const FaceShotUnlockScreen()),
-      slideRoute(Routes.welcomeHomePhone, const WelcomeHomePhoneScreen()),
-      slideRoute(Routes.unlockPasscode, const UnlockPasscodeScreen()),
+      GoRoute(
+        path: Routes.faceShotUnlock,
+        pageBuilder: (context, state) => buildPageWithTransition(
+          FaceShotUnlockScreen(phoneNumber: state.extra as String?),
+        ),
+      ),
+      GoRoute(
+        path: Routes.welcomeHomePhone,
+        pageBuilder: (context, state) => buildPageWithTransition(
+          WelcomeHomePhoneScreen(initialPhone: state.extra as String?),
+        ),
+      ),
+      GoRoute(
+        path: Routes.unlockPasscode,
+        pageBuilder: (context, state) => buildPageWithTransition(
+          UnlockPasscodeScreen(phoneNumber: state.extra as String?),
+        ),
+      ),
       slideRoute(Routes.payPasscode, const PayPasscodeScreen()),
       slideRoute(Routes.securityLockout, const SecurityLockoutScreen()),
       slideRoute(Routes.forgotPasscode, const PasscodeResetScreen()),
-      slideRoute(Routes.recoveryStartkey, const RecoveryStartkeyScreen()),
+      GoRoute(
+        path: Routes.recoveryStartkey,
+        pageBuilder: (context, state) => buildPageWithTransition(
+          state.extra is RecoveryStartkeyArgs
+              ? RecoveryStartkeyScreen(
+                  args: state.extra as RecoveryStartkeyArgs,
+                )
+              : const ForgotPasscodeScreen(),
+        ),
+      ),
 
       // Memo support chat
       slideRoute(Routes.memoChat, const MemoChatScreen()),

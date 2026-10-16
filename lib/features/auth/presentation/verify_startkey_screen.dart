@@ -158,7 +158,7 @@ class _VerifyStartkeyScreenState extends ConsumerState<VerifyStartkeyScreen> {
   void _showEnterCorrectCodePopup() {
     showDialog(
       context: context,
-      barrierDismissible: false,
+      barrierDismissible: true,
       barrierColor: Colors.black.withValues(alpha: 0.3),
       builder: (context) => const EnterCorrectCodePopup(),
     );

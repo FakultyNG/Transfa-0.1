@@ -92,6 +92,16 @@ class AuthRepository {
     required String oldPasscode,
     required String newPasscode,
   }) => _api.changePasscode(oldPasscode: oldPasscode, newPasscode: newPasscode);
+  Future<void> verifyActivePasscode(String passcode) =>
+      _api.verifyActivePasscode(passcode);
+  Future<FaceUnlockConfig> getFaceUnlockConfig() => _api.getFaceUnlockConfig();
+  Future<AppUser> faceUnlock({
+    required String phoneNumber,
+    required String faceImageBase64,
+  }) => _api.faceUnlock(
+    phoneNumber: phoneNumber,
+    faceImageBase64: faceImageBase64,
+  );
 
   Future<OtpChallenge> requestPasscodeReset(String phoneNumber) =>
       _api.requestPasscodeReset(phoneNumber);

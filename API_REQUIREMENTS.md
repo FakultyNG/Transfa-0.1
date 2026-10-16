@@ -24,6 +24,32 @@ session and sends the first OTP in one request. Its data includes
 must not call `/auth/otp/send` immediately afterward. `/auth/otp/resend` remains
 the explicit retry route after the initial challenge.
 
+## Startup, Unlock, And Recovery
+
+- After onboarding PIN confirmation, the welcome screen remains visible until
+  the customer swipes upward; it must not auto-advance or advance on a tap.
+- On a later launch, a restorable server session routes to `/unlock/passcode`.
+  The submitted five-digit passcode is verified with
+  `POST /api/v1/auth/passcode/verify` before Home opens.
+- If no server session can be restored, route to `/unlock/phone` and retain only
+  the last successfully authenticated phone number as a convenience value.
+- Passcode recovery requests an OTP with
+  `POST /api/v1/auth/passcode/reset/request`, verifies it with
+  `/auth/passcode/reset/verify`, and passes the returned `resetToken` into the
+  existing Create PIN UI, which calls `/auth/passcode/reset/complete`.
+- Face unlock first reads `GET /api/v1/auth/face-unlock/config`, captures a new
+  front-camera image, and submits it with the phone number to
+  `POST /api/v1/auth/face-unlock`. The API compares it with the active CashDrop
+  camera profile using `CASH_DROP_MATCH_THRESHOLD`; it never uses the BVN photo.
+  Countdown timing, maximum attempts, and lockout duration come from the config
+  response. The default is a five-second countdown, three attempts, and a
+  one-hour lockout.
+- All successful unlock methods replace the locally stored mobile tokens and
+  route to Home. Explicit Home controls use the dashboard route.
+- Modal content routes and dismissible dialogs treat a tap on the unobscured
+  background as Back. Non-dismissible in-flight progress overlays remain locked
+  until their request completes to prevent navigation corruption.
+
 ## Integrated Domains
 
 - Registration, OTP, BVN/optional selfie KYC, KYC status, login/logout, token refresh,

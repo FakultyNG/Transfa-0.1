@@ -168,11 +168,30 @@ class DashboardScreen extends ConsumerWidget {
     AppUser? user,
     num balance,
   ) async {
+    var requestFinished = false;
+    var dismissedByUser = false;
+    BuildContext? progressContext;
+    void dismissProgress() {
+      final dialogContext = progressContext;
+      if (dialogContext != null && dialogContext.mounted) {
+        Navigator.of(dialogContext).pop();
+      }
+    }
+
     showDialog<void>(
       context: context,
-      barrierDismissible: false,
+      barrierDismissible: true,
       barrierColor: Colors.black.withValues(alpha: 0.45),
-      builder: (_) => const Center(child: CircularProgressIndicator()),
+      builder: (dialogContext) {
+        progressContext = dialogContext;
+        return PopScope(
+          canPop: true,
+          onPopInvokedWithResult: (didPop, _) {
+            if (didPop && !requestFinished) dismissedByUser = true;
+          },
+          child: const Center(child: CircularProgressIndicator()),
+        );
+      },
     );
     late final DedicatedVirtualAccount dva;
     num displayedBalance = balance;
@@ -187,16 +206,18 @@ class DashboardScreen extends ConsumerWidget {
       ref.invalidate(dvaProvider);
       ref.invalidate(walletProvider);
     } catch (error) {
-      if (context.mounted) Navigator.of(context, rootNavigator: true).pop();
-      if (context.mounted) {
+      requestFinished = true;
+      dismissProgress();
+      if (context.mounted && !dismissedByUser) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
       }
       return;
     }
-    if (!context.mounted) return;
-    Navigator.of(context, rootNavigator: true).pop();
+    requestFinished = true;
+    dismissProgress();
+    if (!context.mounted || dismissedByUser) return;
     showDialog(
       context: context,
       barrierDismissible: true,
@@ -294,7 +315,7 @@ class _BalanceWidget extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text(
-                        '${_formatBalance(balance)}',
+                        _formatBalance(balance),
                         style: TextStyle(
                           fontFamily: 'Arial Rounded MT Bold',
                           fontSize: 30,

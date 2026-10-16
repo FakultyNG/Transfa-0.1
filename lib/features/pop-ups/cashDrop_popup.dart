@@ -309,7 +309,7 @@ class _CashDropScreenState extends ConsumerState<CashDropScreen>
                                       MainAxisAlignment.spaceBetween,
                                   children: [
                                     GestureDetector(
-                                      onTap: () => Navigator.of(context).pop(),
+                                      onTap: () => context.go(Routes.dashboard),
                                       child: Container(
                                         width: 50,
                                         height: 50,

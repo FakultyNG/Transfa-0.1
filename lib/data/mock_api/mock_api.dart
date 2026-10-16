@@ -128,6 +128,28 @@ class MockApi implements TransfaApi {
   }
 
   @override
+  Future<void> verifyActivePasscode(String passcode) async {
+    await _delay(true);
+  }
+
+  @override
+  Future<FaceUnlockConfig> getFaceUnlockConfig() => _delay(
+    const FaceUnlockConfig(
+      enabled: true,
+      countdownEnabled: true,
+      countdownSeconds: 5,
+      maxAttempts: 3,
+      lockoutSeconds: 3600,
+    ),
+  );
+
+  @override
+  Future<AppUser> faceUnlock({
+    required String phoneNumber,
+    required String faceImageBase64,
+  }) => _delay(MockData.currentUser);
+
+  @override
   Future<OtpChallenge> requestPasscodeReset(String phoneNumber) =>
       sendOtp(phoneNumber);
 

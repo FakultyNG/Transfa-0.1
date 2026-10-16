@@ -120,7 +120,11 @@ class RestTransfaApi implements TransfaApi {
     await _sessionStore.write(
       AuthSession(accessToken: accessToken, refreshToken: refreshToken),
     );
-    return AppUser.fromJson(_requiredMap(data['user']));
+    final user = AppUser.fromJson(_requiredMap(data['user']));
+    if (user.phone.isNotEmpty) {
+      await _sessionStore.rememberPhoneNumber(user.phone);
+    }
+    return user;
   }
 
   @override
@@ -150,6 +154,33 @@ class RestTransfaApi implements TransfaApi {
       ),
     );
   }
+
+  @override
+  Future<void> verifyActivePasscode(String passcode) async {
+    _data(
+      await _client.post(
+        '$_api/auth/passcode/verify',
+        data: {'passcode': passcode},
+      ),
+    );
+  }
+
+  @override
+  Future<FaceUnlockConfig> getFaceUnlockConfig() async {
+    final data = _dataMap(
+      await _client.get('$_api/auth/face-unlock/config', allowRefresh: false),
+    );
+    return FaceUnlockConfig.fromJson(data);
+  }
+
+  @override
+  Future<AppUser> faceUnlock({
+    required String phoneNumber,
+    required String faceImageBase64,
+  }) => _authenticate('$_api/auth/face-unlock', {
+    'phoneNumber': phoneNumber,
+    'faceImageBase64': faceImageBase64,
+  });
 
   @override
   Future<OtpChallenge> requestPasscodeReset(String phoneNumber) async {

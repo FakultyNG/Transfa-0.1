@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:go_router/go_router.dart';
 import 'package:transfa/core/constants/assets.dart';
-import 'package:transfa/features/auth/presentation/welcome_screen.dart';
 
+import '../../../core/router/routes.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../../data/repositories/repositories.dart';
@@ -12,8 +13,20 @@ import '../../../shared/widgets/wallpaper_scaffold.dart';
 
 /// iOS lockscreen-style passcode entry. Two steps: create, then confirm.
 /// 5-digit passcode (matches the 5 dot indicators in the design).
+class CreatePinRecoveryArgs {
+  const CreatePinRecoveryArgs({
+    required this.phoneNumber,
+    required this.resetToken,
+  });
+
+  final String phoneNumber;
+  final String resetToken;
+}
+
 class CreatePinScreen extends ConsumerStatefulWidget {
-  const CreatePinScreen({super.key});
+  const CreatePinScreen({super.key, this.recovery});
+
+  final CreatePinRecoveryArgs? recovery;
 
   @override
   ConsumerState<CreatePinScreen> createState() => _CreatePinScreenState();
@@ -42,6 +55,19 @@ class _CreatePinScreenState extends ConsumerState<CreatePinScreen> {
       if (_first == _confirm) {
         _isNavigating = true;
         try {
+          final recovery = widget.recovery;
+          if (recovery != null) {
+            final repository = ref.read(authRepositoryProvider);
+            await repository.completePasscodeReset(
+              resetToken: recovery.resetToken,
+              newPasscode: _first,
+            );
+            final user = await repository.login(recovery.phoneNumber, _first);
+            ref.read(currentUserProvider.notifier).state = user;
+            if (!mounted) return;
+            context.go(Routes.dashboard);
+            return;
+          }
           final session = ref.read(registrationSessionProvider);
           if (session?.registrationToken == null) {
             throw StateError('Registration session expired. Start again.');
@@ -55,31 +81,7 @@ class _CreatePinScreenState extends ConsumerState<CreatePinScreen> {
           ref.read(currentUserProvider.notifier).state = user;
           ref.read(registrationSessionProvider.notifier).state = null;
           if (!mounted) return;
-          // Navigate with a clean transition to welcome
-          Navigator.of(context).pushReplacement(
-            PageRouteBuilder(
-              pageBuilder: (context, animation, secondaryAnimation) =>
-                  const WelcomeScreen(),
-              transitionsBuilder:
-                  (context, animation, secondaryAnimation, child) {
-                    const begin = Offset(0.0, 1.0);
-                    const end = Offset.zero;
-                    const curve = Curves.easeOutCubic;
-
-                    var tween = Tween(
-                      begin: begin,
-                      end: end,
-                    ).chain(CurveTween(curve: curve));
-                    var offsetAnimation = animation.drive(tween);
-
-                    return SlideTransition(
-                      position: offsetAnimation,
-                      child: child,
-                    );
-                  },
-              transitionDuration: const Duration(milliseconds: 500),
-            ),
-          );
+          context.go(Routes.welcome);
         } catch (error) {
           if (!mounted) return;
           setState(() {

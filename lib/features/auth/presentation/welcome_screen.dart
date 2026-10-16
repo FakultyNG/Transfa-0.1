@@ -1,10 +1,6 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
-import 'package:transfa/features/dashboard/presentation/dashboard_screen.dart';
 
 import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
@@ -13,7 +9,7 @@ import '../../../data/mock_api/mock_data.dart';
 import '../../../data/repositories/repositories.dart';
 
 /// "Hello Magic" — minimal white screen with handwritten gradient greeting.
-/// Auto-advances; tap or swipe up to skip.
+/// Remains visible until the user deliberately swipes up.
 class WelcomeScreen extends ConsumerStatefulWidget {
   const WelcomeScreen({super.key});
 
@@ -27,63 +23,17 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen>
     vsync: this,
     duration: const Duration(milliseconds: 1000),
   )..forward();
-  Timer? _timer;
   bool _isNavigating = false;
   double _dragOffset = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _timer = Timer(const Duration(milliseconds: 2400), _next);
-  }
 
   void _next() {
     if (_isNavigating) return;
     _isNavigating = true;
-    _timer?.cancel();
-
-    if (mounted) {
-      // Navigate with slide-up transition
-      Navigator.of(context)
-          .push(
-            PageRouteBuilder(
-              pageBuilder: (context, animation, secondaryAnimation) =>
-                  const DashboardScreen(), // Replace with your actual dashboard widget
-              transitionsBuilder:
-                  (context, animation, secondaryAnimation, child) {
-                    const begin = Offset(0.0, 1.0);
-                    const end = Offset.zero;
-                    const curve = Curves.easeOutCubic;
-
-                    var tween = Tween(
-                      begin: begin,
-                      end: end,
-                    ).chain(CurveTween(curve: curve));
-                    var offsetAnimation = animation.drive(tween);
-
-                    return SlideTransition(
-                      position: offsetAnimation,
-                      child: child,
-                    );
-                  },
-              transitionDuration: const Duration(milliseconds: 500),
-            ),
-          )
-          .then((_) {
-            // Reset navigation flag when returning to this screen
-            if (mounted) {
-              setState(() {
-                _isNavigating = false;
-                _dragOffset = 0;
-              });
-            }
-          });
-    }
+    if (mounted) context.go(Routes.dashboard);
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
     _c.dispose();
     super.dispose();
   }
@@ -116,7 +66,6 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen>
             });
           }
         },
-        onTap: _next,
         behavior: HitTestBehavior.opaque,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 300),
@@ -170,6 +119,3 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen>
     );
   }
 }
-
-// Make sure to import the Dashboard screen
-// import '../../dashboard/presentation/dashboard_screen.dart';

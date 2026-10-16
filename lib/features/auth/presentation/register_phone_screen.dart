@@ -74,7 +74,7 @@ class _RegisterPhoneScreenState extends ConsumerState<RegisterPhoneScreen> {
   void _showCheckYourNumberPopup() {
     showDialog(
       context: context,
-      barrierDismissible: false,
+      barrierDismissible: true,
       barrierColor: Colors.black.withValues(alpha: 0.3),
       builder: (context) => const CheckYourNumberPopup(),
     );

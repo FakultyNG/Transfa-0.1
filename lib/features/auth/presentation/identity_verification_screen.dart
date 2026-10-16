@@ -424,7 +424,7 @@ class _IdentityVerificationScreenState
   void _showSuccessPopup() {
     showDialog(
       context: context,
-      barrierDismissible: false,
+      barrierDismissible: true,
       barrierColor: Colors.black.withValues(alpha: 0.5),
       builder: (context) => SuccessPopup(
         capturedFaceImage: _capturedFaceImage,
@@ -436,7 +436,7 @@ class _IdentityVerificationScreenState
   void _showFailedPopup(String message) {
     showDialog(
       context: context,
-      barrierDismissible: false,
+      barrierDismissible: true,
       barrierColor: Colors.black.withValues(alpha: 0.5),
       builder: (context) =>
           FailedPopup(onTryAgain: _retryCapture, message: message),

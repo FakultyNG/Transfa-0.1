@@ -70,7 +70,18 @@ class ModalScaffold extends StatelessWidget {
                           ),
                         ),
                       ],
-                      Expanded(child: Align(alignment: contentAlignment, child: child)),
+                      Expanded(
+                        child: Align(
+                          alignment: contentAlignment,
+                          child: TapRegion(
+                            key: const Key('modal-background-dismiss'),
+                            onTapOutside: (_) {
+                              if (context.canPop()) context.pop();
+                            },
+                            child: child,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),

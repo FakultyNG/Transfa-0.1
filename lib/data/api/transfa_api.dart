@@ -36,6 +36,12 @@ abstract interface class TransfaApi {
     required String oldPasscode,
     required String newPasscode,
   });
+  Future<void> verifyActivePasscode(String passcode);
+  Future<FaceUnlockConfig> getFaceUnlockConfig();
+  Future<AppUser> faceUnlock({
+    required String phoneNumber,
+    required String faceImageBase64,
+  });
   Future<OtpChallenge> requestPasscodeReset(String phoneNumber);
   Future<String> verifyPasscodeReset({
     required String phoneNumber,

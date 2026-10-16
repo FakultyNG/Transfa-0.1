@@ -80,6 +80,31 @@ class OtpChallenge {
   final String otpReference;
 }
 
+class FaceUnlockConfig {
+  const FaceUnlockConfig({
+    required this.enabled,
+    required this.countdownEnabled,
+    required this.countdownSeconds,
+    required this.maxAttempts,
+    required this.lockoutSeconds,
+  });
+
+  factory FaceUnlockConfig.fromJson(Map<String, dynamic> json) =>
+      FaceUnlockConfig(
+        enabled: json['enabled'] == true,
+        countdownEnabled: json['countdownEnabled'] != false,
+        countdownSeconds: (json['countdownSeconds'] as num?)?.toInt() ?? 5,
+        maxAttempts: (json['maxAttempts'] as num?)?.toInt() ?? 3,
+        lockoutSeconds: (json['lockoutSeconds'] as num?)?.toInt() ?? 3600,
+      );
+
+  final bool enabled;
+  final bool countdownEnabled;
+  final int countdownSeconds;
+  final int maxAttempts;
+  final int lockoutSeconds;
+}
+
 class BvnVerification {
   const BvnVerification({
     required this.kycReference,

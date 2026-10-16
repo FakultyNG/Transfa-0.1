@@ -307,7 +307,7 @@ Future<void> showBankUnavailablePopup(
 }) {
   return showDialog(
     context: context,
-    barrierDismissible: false,
+    barrierDismissible: true,
     barrierColor: Colors.transparent,
     useRootNavigator: true,
     builder: (dialogContext) => BankUnavailablePopup(

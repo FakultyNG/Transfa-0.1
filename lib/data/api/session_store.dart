@@ -10,7 +10,9 @@ class AuthSession {
 abstract interface class SessionStore {
   Future<String?> readAccessToken();
   Future<String?> readRefreshToken();
+  Future<String?> readLastPhoneNumber();
   Future<void> write(AuthSession session);
+  Future<void> rememberPhoneNumber(String phoneNumber);
   Future<void> clear();
 }
 
@@ -20,6 +22,7 @@ class SecureSessionStore implements SessionStore {
 
   static const _accessTokenKey = 'transfa_access_token';
   static const _refreshTokenKey = 'transfa_refresh_token';
+  static const _lastPhoneNumberKey = 'transfa_last_phone_number';
 
   final FlutterSecureStorage _storage;
 
@@ -30,6 +33,10 @@ class SecureSessionStore implements SessionStore {
   Future<String?> readRefreshToken() => _storage.read(key: _refreshTokenKey);
 
   @override
+  Future<String?> readLastPhoneNumber() =>
+      _storage.read(key: _lastPhoneNumberKey);
+
+  @override
   Future<void> write(AuthSession session) async {
     await _storage.write(key: _accessTokenKey, value: session.accessToken);
     if (session.refreshToken case final refreshToken?) {
@@ -38,6 +45,10 @@ class SecureSessionStore implements SessionStore {
       await _storage.delete(key: _refreshTokenKey);
     }
   }
+
+  @override
+  Future<void> rememberPhoneNumber(String phoneNumber) =>
+      _storage.write(key: _lastPhoneNumberKey, value: phoneNumber);
 
   @override
   Future<void> clear() async {

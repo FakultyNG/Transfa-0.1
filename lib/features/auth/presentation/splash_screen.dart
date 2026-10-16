@@ -38,9 +38,18 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       if (!mounted) return;
       if (user != null) {
         ref.read(currentUserProvider.notifier).state = user;
-        context.go(Routes.dashboard);
+        context.go(Routes.unlockPasscode, extra: user.phone);
       } else {
-        context.go(Routes.welcomeIntro);
+        final knownPhone = await ref
+            .read(sessionStoreProvider)
+            .readLastPhoneNumber();
+        if (!mounted) return;
+        context.go(
+          knownPhone == null || knownPhone.isEmpty
+              ? Routes.welcomeIntro
+              : Routes.welcomeHomePhone,
+          extra: knownPhone,
+        );
       }
     } catch (error) {
       if (!mounted) return;

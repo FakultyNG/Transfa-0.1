@@ -1,9 +1,16 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
+import 'package:camera/camera.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:transfa/shared/widgets/animated_dotted_loader.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/error_messages.dart';
+import '../../../data/api/api_exception.dart';
+import '../../../data/repositories/repositories.dart';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -15,6 +22,7 @@ import '../../../core/theme/app_typography.dart';
 import '../../../shared/widgets/keypad_button.dart';
 import '../../../shared/widgets/wallpaper_scaffold.dart';
 import '../../../shared/widgets/transfa_logo.dart';
+import 'create_pin_screen.dart';
 
 /// Shared lockscreen scaffold for the passcode unlock surfaces. The
 /// content above the keypad and the bottom action row are customisable.
@@ -221,24 +229,50 @@ class _RedCancelPill extends StatelessWidget {
 }
 
 /// "Unlock with Your Transfa Passcode" — main unlock lockscreen.
-class UnlockPasscodeScreen extends StatefulWidget {
-  const UnlockPasscodeScreen({super.key});
+class UnlockPasscodeScreen extends ConsumerStatefulWidget {
+  const UnlockPasscodeScreen({super.key, this.phoneNumber});
+
+  final String? phoneNumber;
 
   @override
-  State<UnlockPasscodeScreen> createState() => _UnlockPasscodeScreenState();
+  ConsumerState<UnlockPasscodeScreen> createState() =>
+      _UnlockPasscodeScreenState();
 }
 
-class _UnlockPasscodeScreenState extends State<UnlockPasscodeScreen> {
+class _UnlockPasscodeScreenState extends ConsumerState<UnlockPasscodeScreen> {
   String _code = '';
+  bool _loading = false;
 
-  void _tap(String d) {
+  Future<void> _tap(String d) async {
+    if (_loading) return;
     setState(() {
       if (_code.length < 5) _code += d;
     });
     if (_code.length == 5) {
-      Future.delayed(const Duration(milliseconds: 250), () {
+      setState(() => _loading = true);
+      try {
+        final repository = ref.read(authRepositoryProvider);
+        final activeUser = ref.read(currentUserProvider);
+        if (activeUser != null) {
+          await repository.verifyActivePasscode(_code);
+        } else {
+          final phone = widget.phoneNumber?.replaceAll(RegExp(r'\s'), '');
+          if (phone == null || phone.isEmpty) {
+            throw StateError('Enter your registered phone number first.');
+          }
+          final user = await repository.login(phone, _code);
+          ref.read(currentUserProvider.notifier).state = user;
+        }
         if (mounted) context.go(Routes.dashboard);
-      });
+      } catch (error) {
+        if (!mounted) return;
+        setState(() => _code = '');
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
+      } finally {
+        if (mounted) setState(() => _loading = false);
+      }
     }
   }
 
@@ -275,10 +309,14 @@ class _UnlockPasscodeScreenState extends State<UnlockPasscodeScreen> {
       filled: _code.length,
       onKey: _tap,
       onBack: _back,
-      leftButton: _PillTextButton(label: 'Cancel', onTap: () => context.pop()),
+      leftButton: _PillTextButton(
+        label: 'Cancel',
+        onTap: () =>
+            context.go(Routes.welcomeHomePhone, extra: widget.phoneNumber),
+      ),
       rightButton: _PillTextButton(
         label: 'Forgot Passcode',
-        onTap: () => context.push(Routes.forgotPasscode),
+        onTap: () => context.push(Routes.recoveryStartkey),
       ),
     );
   }
@@ -358,7 +396,7 @@ class _SecurityLockoutState extends State<SecurityLockoutScreen> {
       leftButton: _PillTextButton(label: 'Cancel', onTap: () => context.pop()),
       rightButton: _PillTextButton(
         label: 'Forgot Passcode',
-        onTap: () => context.push(Routes.forgotPasscode),
+        onTap: () => context.push(Routes.recoveryStartkey),
       ),
     );
   }
@@ -512,22 +550,167 @@ class _PayKeypad extends StatelessWidget {
 // Face Shot unlock — dotted circle + house emoji + Continue with Transfa.
 // ---------------------------------------------------------------------------
 
-class FaceShotUnlockScreen extends StatefulWidget {
-  const FaceShotUnlockScreen({super.key});
+class FaceShotUnlockScreen extends ConsumerStatefulWidget {
+  const FaceShotUnlockScreen({super.key, this.phoneNumber});
+
+  final String? phoneNumber;
 
   @override
-  State<FaceShotUnlockScreen> createState() => _FaceShotUnlockScreenState();
+  ConsumerState<FaceShotUnlockScreen> createState() =>
+      _FaceShotUnlockScreenState();
 }
 
-class _FaceShotUnlockScreenState extends State<FaceShotUnlockScreen>
+class _FaceShotUnlockScreenState extends ConsumerState<FaceShotUnlockScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _c = AnimationController(
     vsync: this,
     duration: const Duration(seconds: 3),
   )..repeat();
+  CameraController? _camera;
+  Timer? _countdownTimer;
+  bool _loading = true;
+  bool _countdownEnabled = true;
+  int _countdownSeconds = 5;
+  int? _countdown;
+  int _maxAttempts = 3;
+  int _lockoutSeconds = 3600;
+  int _failedAttempts = 0;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(_initialize);
+  }
+
+  Future<void> _initialize() async {
+    final phone = widget.phoneNumber?.replaceAll(RegExp(r'\s'), '');
+    if (phone == null || phone.isEmpty) {
+      if (mounted) context.go(Routes.welcomeHomePhone);
+      return;
+    }
+    try {
+      final config = await ref
+          .read(authRepositoryProvider)
+          .getFaceUnlockConfig();
+      if (!config.enabled) throw StateError('Face unlock is not available.');
+      final cameras = await availableCameras();
+      if (cameras.isEmpty) throw StateError('No camera is available.');
+      final front = cameras.firstWhere(
+        (camera) => camera.lensDirection == CameraLensDirection.front,
+        orElse: () => cameras.first,
+      );
+      final controller = CameraController(
+        front,
+        ResolutionPreset.high,
+        enableAudio: false,
+        imageFormatGroup: ImageFormatGroup.jpeg,
+      );
+      await controller.initialize();
+      try {
+        await controller.lockCaptureOrientation(DeviceOrientation.portraitUp);
+        await controller.setFocusMode(FocusMode.auto);
+        await controller.setExposureMode(ExposureMode.auto);
+      } on CameraException {
+        // Some devices do not expose manual focus/exposure controls.
+      }
+      if (!mounted) {
+        await controller.dispose();
+        return;
+      }
+      setState(() {
+        _camera = controller;
+        _countdownEnabled = config.countdownEnabled;
+        _countdownSeconds = config.countdownSeconds;
+        _maxAttempts = config.maxAttempts;
+        _lockoutSeconds = config.lockoutSeconds;
+        _loading = false;
+      });
+      if (_countdownEnabled) _startCountdown();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = userFacingError(error);
+      });
+    }
+  }
+
+  void _startCountdown() {
+    _countdownTimer?.cancel();
+    setState(() {
+      _error = null;
+      _countdown = _countdownSeconds;
+    });
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return timer.cancel();
+      final remaining = (_countdown ?? 1) - 1;
+      if (remaining <= 0) {
+        timer.cancel();
+        setState(() => _countdown = null);
+        _capture();
+      } else {
+        setState(() => _countdown = remaining);
+      }
+    });
+  }
+
+  Future<void> _capture() async {
+    if (_loading) return;
+    final controller = _camera;
+    final phone = widget.phoneNumber?.replaceAll(RegExp(r'\s'), '');
+    if (controller == null ||
+        !controller.value.isInitialized ||
+        phone == null) {
+      return;
+    }
+    _countdownTimer?.cancel();
+    setState(() {
+      _loading = true;
+      _countdown = null;
+      _error = null;
+    });
+    try {
+      final image = await controller.takePicture();
+      final bytes = await image.readAsBytes();
+      final user = await ref
+          .read(authRepositoryProvider)
+          .faceUnlock(
+            phoneNumber: phone,
+            faceImageBase64: 'data:image/jpeg;base64,${base64Encode(bytes)}',
+          );
+      ref.read(currentUserProvider.notifier).state = user;
+      if (mounted) context.go(Routes.dashboard);
+    } catch (error) {
+      if (!mounted) return;
+      final apiError = error is ApiException ? error : null;
+      if (apiError?.code == 'FACE_UNLOCK_FAILED') _failedAttempts += 1;
+      if (apiError?.code == 'FACE_UNLOCK_LOCKED') {
+        _failedAttempts = _maxAttempts;
+      }
+      setState(() {
+        _loading = false;
+        _error = _failedAttempts >= _maxAttempts
+            ? 'Face unlock is locked for ${_lockoutDurationLabel()} after '
+                  '$_maxAttempts failed attempts.'
+            : userFacingError(error);
+      });
+    }
+  }
+
+  String _lockoutDurationLabel() {
+    if (_lockoutSeconds % 3600 == 0) {
+      final hours = _lockoutSeconds ~/ 3600;
+      return '$hours ${hours == 1 ? 'hour' : 'hours'}';
+    }
+    final minutes = (_lockoutSeconds / 60).ceil();
+    return '$minutes ${minutes == 1 ? 'minute' : 'minutes'}';
+  }
 
   @override
   void dispose() {
+    _countdownTimer?.cancel();
+    _camera?.dispose();
     _c.dispose();
     super.dispose();
   }
@@ -542,20 +725,51 @@ class _FaceShotUnlockScreenState extends State<FaceShotUnlockScreen>
           child: Column(
             children: [
               const SizedBox(height: 16),
-              AnimatedBuilder(
-                animation: _c,
-                builder: (_, _) => CustomPaint(
-                  size: const Size(320, 320),
-                  painter: _DottedRingPainter(progress: _c.value),
+              SizedBox(
+                width: 320,
+                height: 320,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    ClipOval(
+                      child: Container(
+                        width: 270,
+                        height: 270,
+                        color: const Color(0xFFE9E9E9),
+                        child: _camera?.value.isInitialized == true
+                            ? _FaceUnlockCameraPreview(controller: _camera!)
+                            : const Center(child: CircularProgressIndicator()),
+                      ),
+                    ),
+                    AnimatedBuilder(
+                      animation: _c,
+                      builder: (_, _) => CustomPaint(
+                        size: const Size(320, 320),
+                        painter: _DottedRingPainter(progress: _c.value),
+                      ),
+                    ),
+                    if (_countdown case final value?)
+                      Container(
+                        width: 86,
+                        height: 86,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.55),
+                          shape: BoxShape.circle,
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          '$value',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 42,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 40),
-              SizedBox(
-                width: 100,
-                height: 100,
-                child: Image.asset(Assets.welcomeHome, width: 98, height: 98),
-              ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 28),
               Text(
                 'Welcome Home',
                 style: AppTypography.subheading.copyWith(
@@ -572,19 +786,57 @@ class _FaceShotUnlockScreenState extends State<FaceShotUnlockScreen>
                   fontSize: 26,
                 ),
               ),
+              if (_error != null) ...[
+                const SizedBox(height: 14),
+                Text(
+                  _error!,
+                  textAlign: TextAlign.center,
+                  style: AppTypography.body.copyWith(color: AppColors.primary),
+                ),
+              ],
               const Spacer(),
               Padding(
                 padding: EdgeInsets.fromLTRB(20, 0, 20, 0),
                 child: PillButton(
-                  label: 'Continue with Transfa',
+                  label: _error == null ? 'Continue with Transfa' : 'Try Again',
                   variant: PillVariant.dark,
                   leading: const TransfaMark(size: 22, white: true),
-                  onPressed: () => context.push(Routes.photoId),
+                  loading: _loading,
+                  onPressed: _failedAttempts >= _maxAttempts
+                      ? null
+                      : () {
+                          if (_countdownEnabled) {
+                            _startCountdown();
+                          } else {
+                            _capture();
+                          }
+                        },
                 ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _FaceUnlockCameraPreview extends StatelessWidget {
+  const _FaceUnlockCameraPreview({required this.controller});
+
+  final CameraController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final previewSize = controller.value.previewSize;
+    if (previewSize == null) return const SizedBox.shrink();
+    return FittedBox(
+      fit: BoxFit.cover,
+      clipBehavior: Clip.hardEdge,
+      child: SizedBox(
+        width: previewSize.height,
+        height: previewSize.width,
+        child: CameraPreview(controller),
       ),
     );
   }
@@ -624,7 +876,6 @@ class _DottedRingPainter extends CustomPainter {
         canvas.drawCircle(dotCenter, 5, dotPaint);
       }
     }
-    canvas.drawCircle(c, r - 18, Paint()..color = const Color(0xFFE9E9E9));
   }
 
   @override
@@ -632,48 +883,35 @@ class _DottedRingPainter extends CustomPainter {
       old.progress != progress;
 }
 
-class _DarkPill extends StatelessWidget {
-  final String label;
-  final VoidCallback onTap;
-  const _DarkPill({required this.label, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 56,
-        padding: const EdgeInsets.symmetric(horizontal: 28),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1A1A1A),
-          borderRadius: BorderRadius.circular(32),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          label,
-          style: AppTypography.subheading.copyWith(
-            color: Colors.white,
-            fontSize: 20,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Welcome Home — Unlock with phone modal.
 // ---------------------------------------------------------------------------
 
 class WelcomeHomePhoneScreen extends StatefulWidget {
-  const WelcomeHomePhoneScreen({super.key});
+  const WelcomeHomePhoneScreen({super.key, this.initialPhone});
+
+  final String? initialPhone;
 
   @override
   State<WelcomeHomePhoneScreen> createState() => _WelcomeHomePhoneScreenState();
 }
 
 class _WelcomeHomePhoneScreenState extends State<WelcomeHomePhoneScreen> {
-  final _phone = TextEditingController(text: '0703 208 4888');
+  late final TextEditingController _phone;
+
+  @override
+  void initState() {
+    super.initState();
+    _phone = TextEditingController(text: _localPhone(widget.initialPhone));
+  }
+
+  String _localPhone(String? value) {
+    final digits = (value ?? '').replaceAll(RegExp(r'\D'), '');
+    if (digits.length == 13 && digits.startsWith('234')) {
+      return '0${digits.substring(3)}';
+    }
+    return digits;
+  }
 
   @override
   void dispose() {
@@ -683,6 +921,8 @@ class _WelcomeHomePhoneScreenState extends State<WelcomeHomePhoneScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final phone = _phone.text.replaceAll(RegExp(r'\s'), '');
+    final validPhone = phone.length >= 10;
     return Scaffold(
       backgroundColor: const Color(0xFFECECEC),
       body: SafeArea(
@@ -690,7 +930,7 @@ class _WelcomeHomePhoneScreenState extends State<WelcomeHomePhoneScreen> {
           padding: const EdgeInsets.fromLTRB(20, 28, 20, 28),
           child: Column(
             children: [
-              Container(
+              SizedBox(
                 width: double.infinity,
                 child: _GlassWrapper(
                   child: Column(
@@ -747,11 +987,19 @@ class _WelcomeHomePhoneScreenState extends State<WelcomeHomePhoneScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    _PhoneField(controller: _phone),
+                    _PhoneField(
+                      controller: _phone,
+                      onChanged: (_) => setState(() {}),
+                    ),
                     const SizedBox(height: 18),
                     _RedLockPill(
                       label: 'Transfa Passcode',
-                      onTap: () => context.push(Routes.unlockPasscode),
+                      onTap: validPhone
+                          ? () => context.push(
+                              Routes.unlockPasscode,
+                              extra: phone,
+                            )
+                          : () {},
                     ),
                   ],
                 ),
@@ -772,7 +1020,10 @@ class _WelcomeHomePhoneScreenState extends State<WelcomeHomePhoneScreen> {
                   const SizedBox(width: 18),
                   _BottomSquare(
                     label: 'Unlock\nwith Face',
-                    onTap: () => context.push(Routes.faceShotUnlock),
+                    onTap: validPhone
+                        ? () =>
+                              context.push(Routes.faceShotUnlock, extra: phone)
+                        : () {},
                     child: SvgPicture.asset(
                       Assets.faceId,
                       width: 30,
@@ -822,7 +1073,8 @@ class _GlassWrapper extends StatelessWidget {
 
 class _PhoneField extends StatelessWidget {
   final TextEditingController controller;
-  const _PhoneField({required this.controller});
+  final ValueChanged<String>? onChanged;
+  const _PhoneField({required this.controller, this.onChanged});
 
   String _formatPhoneNumber(String value) {
     final digits = value.replaceAll(RegExp(r'\s'), '');
@@ -891,11 +1143,11 @@ class _PhoneField extends StatelessWidget {
                       ),
                     );
                   }
+                  onChanged?.call(controller.text);
                 },
               ),
             ),
           ),
-          const AnimatedDottedLoader(),
         ],
       ),
     );
@@ -1008,15 +1260,17 @@ class _BottomSquare extends StatelessWidget {
 // Forgot Passcode modal — phone re-entry to receive a new passcode.
 // ---------------------------------------------------------------------------
 
-class ForgotPasscodeScreen extends StatefulWidget {
+class ForgotPasscodeScreen extends ConsumerStatefulWidget {
   const ForgotPasscodeScreen({super.key});
 
   @override
-  State<ForgotPasscodeScreen> createState() => _ForgotPasscodeScreenState();
+  ConsumerState<ForgotPasscodeScreen> createState() =>
+      _ForgotPasscodeScreenState();
 }
 
-class _ForgotPasscodeScreenState extends State<ForgotPasscodeScreen> {
+class _ForgotPasscodeScreenState extends ConsumerState<ForgotPasscodeScreen> {
   final _phone = TextEditingController();
+  bool _loading = false;
 
   @override
   void dispose() {
@@ -1036,6 +1290,32 @@ class _ForgotPasscodeScreenState extends State<ForgotPasscodeScreen> {
       buffer.write(digits[i]);
     }
     return buffer.toString();
+  }
+
+  Future<void> _continue() async {
+    if (_loading) return;
+    final phone = _phone.text.replaceAll(RegExp(r'\s'), '');
+    setState(() => _loading = true);
+    try {
+      final challenge = await ref
+          .read(authRepositoryProvider)
+          .requestPasscodeReset(phone);
+      if (!mounted) return;
+      context.push(
+        Routes.recoveryStartkey,
+        extra: RecoveryStartkeyArgs(
+          phoneNumber: challenge.phoneNumber,
+          otpReference: challenge.otpReference,
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   @override
@@ -1151,7 +1431,7 @@ class _ForgotPasscodeScreenState extends State<ForgotPasscodeScreen> {
                               fontSize: 20,
                             ),
                             decoration: InputDecoration(
-                              hintText: '0703 208 4888',
+                              hintText: 'Phone number',
                               hintStyle: AppTypography.subheading.copyWith(
                                 color: const Color(0xFFBDBDBD),
                                 fontSize: 18,
@@ -1213,9 +1493,7 @@ class _ForgotPasscodeScreenState extends State<ForgotPasscodeScreen> {
                         child: Opacity(
                           opacity: canContinue ? 1 : 0.45,
                           child: GestureDetector(
-                            onTap: canContinue
-                                ? () => context.push(Routes.recoveryStartkey)
-                                : null,
+                            onTap: canContinue ? _continue : null,
                             child: Container(
                               height: 56,
                               decoration: BoxDecoration(
@@ -1228,13 +1506,22 @@ class _ForgotPasscodeScreenState extends State<ForgotPasscodeScreen> {
                                 borderRadius: BorderRadius.circular(32),
                               ),
                               alignment: Alignment.center,
-                              child: Text(
-                                'Continue',
-                                style: AppTypography.subheading.copyWith(
-                                  color: Colors.white,
-                                  fontSize: 20,
-                                ),
-                              ),
+                              child: _loading
+                                  ? const SizedBox(
+                                      width: 22,
+                                      height: 22,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2.2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : Text(
+                                      'Continue',
+                                      style: AppTypography.subheading.copyWith(
+                                        color: Colors.white,
+                                        fontSize: 20,
+                                      ),
+                                    ),
                             ),
                           ),
                         ),
@@ -1256,8 +1543,89 @@ class _ForgotPasscodeScreenState extends State<ForgotPasscodeScreen> {
 // glyph in the header card (used during the Forgot Passcode recovery).
 // ---------------------------------------------------------------------------
 
-class RecoveryStartkeyScreen extends StatelessWidget {
-  const RecoveryStartkeyScreen({super.key});
+class RecoveryStartkeyArgs {
+  const RecoveryStartkeyArgs({
+    required this.phoneNumber,
+    required this.otpReference,
+  });
+
+  final String phoneNumber;
+  final String otpReference;
+}
+
+class RecoveryStartkeyScreen extends ConsumerStatefulWidget {
+  const RecoveryStartkeyScreen({super.key, required this.args});
+
+  final RecoveryStartkeyArgs args;
+
+  @override
+  ConsumerState<RecoveryStartkeyScreen> createState() =>
+      _RecoveryStartkeyScreenState();
+}
+
+class _RecoveryStartkeyScreenState
+    extends ConsumerState<RecoveryStartkeyScreen> {
+  final _otp = TextEditingController();
+  final _focus = FocusNode();
+  late String _otpReference = widget.args.otpReference;
+  bool _loading = false;
+
+  @override
+  void dispose() {
+    _otp.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  Future<void> _verify() async {
+    if (_loading || _otp.text.length != 6) return;
+    setState(() => _loading = true);
+    try {
+      final resetToken = await ref
+          .read(authRepositoryProvider)
+          .verifyPasscodeReset(
+            phoneNumber: widget.args.phoneNumber,
+            otp: _otp.text,
+            otpReference: _otpReference,
+          );
+      if (!mounted) return;
+      context.push(
+        Routes.createPin,
+        extra: CreatePinRecoveryArgs(
+          phoneNumber: widget.args.phoneNumber,
+          resetToken: resetToken,
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      _otp.clear();
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _resend() async {
+    if (_loading) return;
+    setState(() => _loading = true);
+    try {
+      final challenge = await ref
+          .read(authRepositoryProvider)
+          .requestPasscodeReset(widget.args.phoneNumber);
+      _otpReference = challenge.otpReference;
+      _otp.clear();
+      if (mounted) _focus.requestFocus();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1282,7 +1650,7 @@ class RecoveryStartkeyScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Transfa sent your Startkey to your\nphone: 0703 208 4888.',
+                    'Transfa sent your Startkey to your\nphone: ${widget.args.phoneNumber}.',
                     style: AppTypography.body.copyWith(fontSize: 17),
                   ),
                 ],
@@ -1304,22 +1672,60 @@ class RecoveryStartkeyScreen extends StatelessWidget {
                     ],
                   ),
 
-                  const SizedBox(height: 56),
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(40, 0, 40, 0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: List.generate(
-                        6,
-                        (_) => Container(
-                          width: 30,
-                          height: 3,
-                          color: Colors.black,
-                        ),
+                  const SizedBox(height: 42),
+                  SizedBox(
+                    width: 1,
+                    height: 1,
+                    child: TextField(
+                      controller: _otp,
+                      focusNode: _focus,
+                      autofocus: true,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(6),
+                      ],
+                      onChanged: (value) {
+                        setState(() {});
+                        if (value.length == 6) _verify();
+                      },
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: _focus.requestFocus,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 18),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: List.generate(6, (index) {
+                          final value = index < _otp.text.length
+                              ? _otp.text[index]
+                              : '';
+                          return SizedBox(
+                            width: 34,
+                            child: Column(
+                              children: [
+                                Text(
+                                  value,
+                                  style: AppTypography.heading.copyWith(
+                                    fontSize: 24,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Container(
+                                  width: 30,
+                                  height: 3,
+                                  color: Colors.black,
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
                       ),
                     ),
                   ),
                   const SizedBox(height: 28),
+                  if (_loading) const LinearProgressIndicator(),
                 ],
               ),
             ),
@@ -1342,7 +1748,7 @@ class RecoveryStartkeyScreen extends StatelessWidget {
                         height: 20,
                       ),
                       label: 'Send New Startkey',
-                      onTap: () {},
+                      onTap: _resend,
                     ),
                     const SizedBox(height: 10),
                     _ActionRow(
