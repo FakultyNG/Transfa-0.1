@@ -88,6 +88,7 @@ class AuthRepository {
 
   Future<void> logout() => _api.logout();
   Future<AppUser> getProfile() => _api.getProfile();
+  Future<Map<String, dynamic>> verifyNin(String nin) => _api.verifyNin(nin);
   Future<void> changePasscode({
     required String oldPasscode,
     required String newPasscode,
@@ -219,6 +220,7 @@ class WalletRepository {
   Future<AppTransaction> verifyFunding(String reference) =>
       _api.verifyFunding(reference);
   Future<DedicatedVirtualAccount> createDva() => _api.createDva();
+  Future<void> markAddMoneyClicked() => _api.markAddMoneyClicked();
   Future<DedicatedVirtualAccount> dva() async {
     try {
       return await _api.getDva();

@@ -10,6 +10,8 @@ class AppUser {
   final String? dateOfBirth;
   final String? gender;
   final String? country;
+  final String accountTier;
+  final bool showAddMoney;
 
   const AppUser({
     required this.id,
@@ -23,6 +25,8 @@ class AppUser {
     this.dateOfBirth,
     this.gender,
     this.country,
+    this.accountTier = 'citizen',
+    this.showAddMoney = true,
   });
 
   factory AppUser.fromJson(Map<String, dynamic> json) => AppUser(
@@ -49,6 +53,8 @@ class AppUser {
     dateOfBirth: json['dateOfBirth']?.toString(),
     gender: json['gender']?.toString(),
     country: json['country']?.toString(),
+    accountTier: (json['accountTier'] ?? 'citizen').toString(),
+    showAddMoney: json['showAddMoney'] != false,
   );
 
   AppUser copyWith({
@@ -62,6 +68,8 @@ class AppUser {
     String? dateOfBirth,
     String? gender,
     String? country,
+    String? accountTier,
+    bool? showAddMoney,
   }) => AppUser(
     id: id,
     fullName: fullName ?? this.fullName,
@@ -74,6 +82,8 @@ class AppUser {
     dateOfBirth: dateOfBirth ?? this.dateOfBirth,
     gender: gender ?? this.gender,
     country: country ?? this.country,
+    accountTier: accountTier ?? this.accountTier,
+    showAddMoney: showAddMoney ?? this.showAddMoney,
   );
 
   Map<String, dynamic> toJson() => {
@@ -88,5 +98,7 @@ class AppUser {
     if (dateOfBirth != null) 'dateOfBirth': dateOfBirth,
     if (gender != null) 'gender': gender,
     if (country != null) 'country': country,
+    'accountTier': accountTier,
+    'showAddMoney': showAddMoney,
   };
 }

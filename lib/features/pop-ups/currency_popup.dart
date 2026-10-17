@@ -1,6 +1,8 @@
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+
 import '../../../core/constants/assets.dart';
 import '../../../shared/widgets/transfa_logo.dart';
 import '../../../data/mock_api/currency.dart';
@@ -184,7 +186,14 @@ class _CurrencyOption extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => Navigator.of(context).pop(currency),
+      onTap: () {
+        if (currency == AmountCurrency.ngn) {
+          Navigator.of(context).pop(currency);
+          return;
+        }
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$label is coming soon.')));
+      },
       child: Container(
         width: double.infinity,
         height: 56, // Fixed height for all options

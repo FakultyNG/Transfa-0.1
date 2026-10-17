@@ -196,3 +196,11 @@ Non-2xx responses should use a stable machine-readable code and safe message:
 - Rate-limit authentication, OTP, passcode, and transfer endpoints.
 - Encrypt sensitive personal data and keep an immutable transfer audit trail.
 - Return UTC ISO-8601 timestamps and uppercase ISO currency codes.
+# 2026-10-17 contract additions
+
+- Session refresh tokens last 72 hours. An active-session app launch opens `/unlock/passcode`; passcode success logs in again and starts a new 72-hour session. An absent/expired session opens `/unlock/phone`.
+- `AppUser` consumes `accountTier` and `showAddMoney` from auth/profile responses.
+- `POST /api/v1/wallet/add-money/clicked` is called on the first Add Money click. The button is hidden immediately and remains hidden for that account.
+- `POST /api/v1/kyc/nin/verify`, body `{ "nin": "..." }`, powers `/identity/add-nin`; success refreshes profile/tier data and shows the existing Done popup with the user's profile/CashDrop image.
+- Account image sharing renders the live account popup to PNG and invokes the native device share sheet.
+- Support chat uses the existing support ticket/message API as a single continuous thread and polls every five seconds for admin replies.

@@ -32,9 +32,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   Future<void> _restore() async {
     setState(() => _error = null);
     try {
-      final restoration = ref.read(sessionRestorationProvider.future);
-      await Future<void>.delayed(const Duration(milliseconds: 1200));
-      final user = await restoration;
+      final user = await ref
+          .read(sessionRestorationProvider.future)
+          .timeout(const Duration(seconds: 4));
       if (!mounted) return;
       if (user != null) {
         ref.read(currentUserProvider.notifier).state = user;
@@ -53,7 +53,15 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       }
     } catch (error) {
       if (!mounted) return;
-      setState(() => _error = userFacingError(error));
+      final store = ref.read(sessionStoreProvider);
+      final phone = await store.readLastPhoneNumber();
+      final completedOnboarding = await store.hasCompletedOnboarding();
+      if (!mounted) return;
+      if (completedOnboarding || (phone?.isNotEmpty ?? false)) {
+        context.go(Routes.welcomeHomePhone, extra: phone);
+      } else {
+        setState(() => _error = userFacingError(error));
+      }
     }
   }
 

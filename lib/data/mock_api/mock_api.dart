@@ -282,6 +282,16 @@ class MockApi implements TransfaApi {
   Future<DedicatedVirtualAccount> createDva() => _delay(MockData.dva);
 
   @override
+  Future<void> markAddMoneyClicked() => _delay(null);
+
+  @override
+  Future<Map<String, dynamic>> verifyNin(String nin) => _delay({
+    'ninVerified': true,
+    'ninMasked': '*******${nin.substring(nin.length - 4)}',
+    'accountTier': 'captain',
+  });
+
+  @override
   Future<List<Bank>> getNgnBanks() => _delay(const [
     Bank(code: '044', name: 'Access Bank'),
     Bank(code: '058', name: 'GTBank'),

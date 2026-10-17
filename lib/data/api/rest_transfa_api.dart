@@ -376,6 +376,18 @@ class RestTransfaApi implements TransfaApi {
   }
 
   @override
+  Future<void> markAddMoneyClicked() async {
+    _data(await _client.post('$_api/wallet/add-money/clicked'));
+  }
+
+  @override
+  Future<Map<String, dynamic>> verifyNin(String nin) async {
+    return _dataMap(
+      await _client.post('$_api/kyc/nin/verify', data: {'nin': nin}),
+    );
+  }
+
+  @override
   Future<List<Bank>> getNgnBanks() async {
     final data = _data(await _client.get('$_api/transfers/ngn/banks'));
     if (data is! List) {

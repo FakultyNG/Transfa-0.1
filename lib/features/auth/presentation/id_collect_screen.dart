@@ -17,6 +17,7 @@ import '../../../data/repositories/repositories.dart';
 import '../../../shared/widgets/glass_card.dart';
 import '../../../shared/widgets/pressable_scale.dart';
 import '../../../features/pop-ups/transfaBankPrivacy_popup.dart';
+import '../../../features/pop-ups/transfaDone_popup.dart';
 
 class IdCollectScreen extends StatefulWidget {
   final WidgetBuilder iconBuilder;
@@ -630,16 +631,15 @@ class AddBvnScreen extends ConsumerWidget {
           );
         } catch (error) {
           if (!context.mounted) return;
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(userFacingError(error))));
         }
       },
     );
   }
 }
 
-class AddNinScreen extends StatelessWidget {
+class AddNinScreen extends ConsumerWidget {
   const AddNinScreen({super.key});
 
   String _formatIdNumber(String number) {
@@ -648,7 +648,7 @@ class AddNinScreen extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return IdCollectScreen(
       iconBuilder: (_) => Container(
         decoration: BoxDecoration(
@@ -670,16 +670,33 @@ class AddNinScreen extends StatelessWidget {
           'Earn money across Nigeria and\naccess banking & capital services.',
       placeholder: '2342 7699 875',
       footerLookupLabel: 'My NIN',
-      onContinue: (enteredNumber) {
-        showIdVerificationPopup(
-          context,
-          enteredNumber: enteredNumber,
-          formattedNumber: _formatIdNumber(enteredNumber),
-          idType: 'NIN',
-          onConfirm: () {
-            context.push(Routes.identityVerification);
-          },
-        );
+      onContinue: (enteredNumber) async {
+        try {
+          final result = await ref
+              .read(authRepositoryProvider)
+              .verifyNin(enteredNumber);
+          ref.invalidate(profileProvider);
+          if (!context.mounted) return;
+          final profile = ref.read(currentUserProvider);
+          await showDialog<void>(
+            context: context,
+            barrierDismissible: true,
+            barrierColor: Colors.black.withValues(alpha: 0.6),
+            builder: (_) => TransfaDonePopup(
+              userName: profile?.fullName ?? 'Transfa user',
+              userImageUrl:
+                  result['profileImageUrl']?.toString() ?? profile?.avatarUrl,
+              navigateToReceipt: false,
+              onClose: () {
+                if (context.mounted) context.pop();
+              },
+            ),
+          );
+        } catch (error) {
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(userFacingError(error))));
+        }
       },
     );
   }

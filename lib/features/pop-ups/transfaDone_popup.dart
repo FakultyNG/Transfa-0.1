@@ -1,7 +1,9 @@
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../core/constants/assets.dart';
 import '../../core/router/routes.dart';
 
@@ -12,12 +14,14 @@ class TransfaDonePopup extends StatefulWidget {
   final VoidCallback? onClose;
   final String? userImageUrl;
   final String userName;
+  final bool navigateToReceipt;
 
   const TransfaDonePopup({
     super.key,
     this.onClose,
     this.userImageUrl,
     required this.userName,
+    this.navigateToReceipt = true,
   });
 
   @override
@@ -55,7 +59,7 @@ class _TransfaDonePopupState extends State<TransfaDonePopup>
         // Close the popup first
         Navigator.of(context).pop();
         // Then navigate to receipt screen using GoRouter
-        context.go(Routes.receiptInReview); 
+        if (widget.navigateToReceipt) context.go(Routes.receiptInReview);
         widget.onClose?.call();
       }
     });
@@ -74,7 +78,7 @@ class _TransfaDonePopupState extends State<TransfaDonePopup>
         if (!_isNavigating) {
           _isNavigating = true;
           Navigator.of(context).pop();
-          context.go(Routes.receiptInReview);
+          if (widget.navigateToReceipt) context.go(Routes.receiptInReview);
           widget.onClose?.call();
         }
       },
@@ -146,10 +150,15 @@ class _TransfaDonePopupState extends State<TransfaDonePopup>
                                   child:
                                       widget.userImageUrl != null &&
                                           widget.userImageUrl!.isNotEmpty
-                                      ? Image.asset(
-                                          widget.userImageUrl!,
-                                          fit: BoxFit.cover,
-                                        )
+                                      ? widget.userImageUrl!.startsWith('http')
+                                            ? Image.network(
+                                                widget.userImageUrl!,
+                                                fit: BoxFit.cover,
+                                              )
+                                            : Image.asset(
+                                                widget.userImageUrl!,
+                                                fit: BoxFit.cover,
+                                              )
                                       : Center(
                                           child: Text(
                                             widget.userName.isNotEmpty
@@ -201,7 +210,9 @@ class _TransfaDonePopupState extends State<TransfaDonePopup>
                                           child: Container(
                                             width: 8,
                                             height: 8,
-                                            child: SvgPicture.asset(Assets.check),
+                                            child: SvgPicture.asset(
+                                              Assets.check,
+                                            ),
                                           ),
                                         ),
                                       ],

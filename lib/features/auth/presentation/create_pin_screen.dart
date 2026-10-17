@@ -62,10 +62,10 @@ class _CreatePinScreenState extends ConsumerState<CreatePinScreen> {
               resetToken: recovery.resetToken,
               newPasscode: _first,
             );
-            final user = await repository.login(recovery.phoneNumber, _first);
-            ref.read(currentUserProvider.notifier).state = user;
+            await ref.read(sessionStoreProvider).clear();
+            ref.read(currentUserProvider.notifier).state = null;
             if (!mounted) return;
-            context.go(Routes.dashboard);
+            context.go(Routes.welcomeHomePhone, extra: recovery.phoneNumber);
             return;
           }
           final session = ref.read(registrationSessionProvider);
@@ -91,9 +91,8 @@ class _CreatePinScreenState extends ConsumerState<CreatePinScreen> {
             _confirm = '';
             _confirming = false;
           });
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(userFacingError(error))));
         }
       } else {
         // mismatch — reset both, stay on create step

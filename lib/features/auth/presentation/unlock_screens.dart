@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+
 import 'package:camera/camera.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -253,23 +254,21 @@ class _UnlockPasscodeScreenState extends ConsumerState<UnlockPasscodeScreen> {
       try {
         final repository = ref.read(authRepositoryProvider);
         final activeUser = ref.read(currentUserProvider);
-        if (activeUser != null) {
-          await repository.verifyActivePasscode(_code);
-        } else {
-          final phone = widget.phoneNumber?.replaceAll(RegExp(r'\s'), '');
-          if (phone == null || phone.isEmpty) {
-            throw StateError('Enter your registered phone number first.');
-          }
-          final user = await repository.login(phone, _code);
-          ref.read(currentUserProvider.notifier).state = user;
+        final phone = (activeUser?.phone ?? widget.phoneNumber)?.replaceAll(
+          RegExp(r'\s'),
+          '',
+        );
+        if (phone == null || phone.isEmpty) {
+          throw StateError('Enter your registered phone number first.');
         }
+        final user = await repository.login(phone, _code);
+        ref.read(currentUserProvider.notifier).state = user;
         if (mounted) context.go(Routes.dashboard);
       } catch (error) {
         if (!mounted) return;
         setState(() => _code = '');
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(userFacingError(error))));
       } finally {
         if (mounted) setState(() => _loading = false);
       }
@@ -1310,9 +1309,8 @@ class _ForgotPasscodeScreenState extends ConsumerState<ForgotPasscodeScreen> {
       );
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(userFacingError(error))));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -1599,9 +1597,8 @@ class _RecoveryStartkeyScreenState
     } catch (error) {
       if (!mounted) return;
       _otp.clear();
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(userFacingError(error))));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -1616,12 +1613,16 @@ class _RecoveryStartkeyScreenState
           .requestPasscodeReset(widget.args.phoneNumber);
       _otpReference = challenge.otpReference;
       _otp.clear();
-      if (mounted) _focus.requestFocus();
+      if (mounted) {
+        _focus.requestFocus();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('A new Startkey has been sent.')),
+        );
+      }
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(userFacingError(error))));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -1673,22 +1674,25 @@ class _RecoveryStartkeyScreenState
                   ),
 
                   const SizedBox(height: 42),
-                  SizedBox(
-                    width: 1,
-                    height: 1,
-                    child: TextField(
-                      controller: _otp,
-                      focusNode: _focus,
-                      autofocus: true,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly,
-                        LengthLimitingTextInputFormatter(6),
-                      ],
-                      onChanged: (value) {
-                        setState(() {});
-                        if (value.length == 6) _verify();
-                      },
+                  Opacity(
+                    opacity: 0.01,
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: TextField(
+                        controller: _otp,
+                        focusNode: _focus,
+                        autofocus: true,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(6),
+                        ],
+                        onChanged: (value) {
+                          setState(() {});
+                          if (value.length == 6) _verify();
+                        },
+                      ),
                     ),
                   ),
                   GestureDetector(

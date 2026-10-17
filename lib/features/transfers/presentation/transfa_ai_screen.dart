@@ -1,8 +1,10 @@
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../../features/pop-ups/currency_popup.dart';
 import '../../../core/constants/assets.dart';
 import '../../../core/router/routes.dart';
@@ -168,8 +170,7 @@ class _TransfaAiScreenState extends ConsumerState<TransfaAiScreen> {
               children: [
                 HomeFab(onTap: () => context.go(Routes.dashboard)),
                 const SizedBox(width: 16),
-                Container(
-                  width: 250,
+                Expanded(
                   child: TodayKeypadTabs(
                     keypadActive: _view == TransfaAiView.keypad,
                     onTodayTap: () => _toggle(TransfaAiView.today),
@@ -754,7 +755,7 @@ class _KeypadView extends StatelessWidget {
                   behavior: HitTestBehavior.opaque,
                   onTap: onSend,
                   child: SvgPicture.asset(
-                    Assets.sendIcon,
+                    Assets.send,
                     width: actionSize,
                     height: actionSize,
                     fit: BoxFit.contain,
@@ -822,7 +823,7 @@ class _Keypad extends StatelessWidget {
         height: size,
         alignment: Alignment.center,
         child: SvgPicture.asset(
-          Assets.deleteIcon,
+          Assets.delete,
           width: (size * 0.41).clamp(26.0, 32.0),
           height: (size / 3).clamp(21.0, 26.0),
           fit: BoxFit.contain,

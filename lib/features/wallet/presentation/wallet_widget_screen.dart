@@ -1,4 +1,5 @@
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
@@ -47,7 +48,7 @@ class WalletWidgetScreen extends StatelessWidget {
 
             // 1. Frosted Wallet widget card.
             GestureDetector(
-              onTap: () => context.push(Routes.walletOverview),
+              onTap: () {},
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(32),
                 child: BackdropFilter(
@@ -129,7 +130,11 @@ class WalletWidgetScreen extends StatelessWidget {
                 _AppIcon(
                   asset: Assets.reeplayIcon,
                   label: 'Reeplay',
-                  onTap: () {},
+                  onTap: () => _showComingSoonPopup(
+                    context,
+                    'Easter Egg',
+                    'You got 7 Days of Reeplay. Share photos when Reeplay is available on Transfa.',
+                  ),
                 ),
               ],
             ),

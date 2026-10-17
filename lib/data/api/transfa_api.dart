@@ -84,6 +84,8 @@ abstract interface class TransfaApi {
   Future<AppTransaction> verifyFunding(String reference);
   Future<DedicatedVirtualAccount> getDva();
   Future<DedicatedVirtualAccount> createDva();
+  Future<void> markAddMoneyClicked();
+  Future<Map<String, dynamic>> verifyNin(String nin);
 
   Future<List<Bank>> getNgnBanks();
   Future<ResolvedBankAccount> resolveNgnAccount({

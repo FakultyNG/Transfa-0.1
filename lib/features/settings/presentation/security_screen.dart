@@ -52,9 +52,8 @@ class _SecurityScreenState extends ConsumerState<SecurityScreen> {
       ref.invalidate(biometricStatusProvider);
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(userFacingError(error))));
     } finally {
       if (mounted) setState(() => _changingBiometric = false);
     }
@@ -130,12 +129,6 @@ class _SecurityScreenState extends ConsumerState<SecurityScreen> {
                 const SizedBox(height: 22),
                 _GroupedCard(
                   children: [
-                    _ChevronRow(
-                      icon: _GreenLockTile(),
-                      label: 'Verify Passcode',
-                      onTap: () => context.push(Routes.createPin),
-                    ),
-                    const Divider(color: Color(0xFFEEEEEE), height: 1),
                     _ChevronRow(
                       icon: _OrangeLockTile(),
                       label: 'Change Passcode',

@@ -1,8 +1,10 @@
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../../core/constants/assets.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/theme/app_typography.dart';
@@ -18,11 +20,18 @@ import '../../../features/pop-ups/cashdrop_popup.dart';
 
 /// iOS-style home: bell top-right, "🏠 Home" title, frosted balance widget
 /// with profile + balance + Add Money pill, then a grid of app icons.
-class DashboardScreen extends ConsumerWidget {
+class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends ConsumerState<DashboardScreen> {
+  bool _addMoneyClicked = false;
+
+  @override
+  Widget build(BuildContext context) {
     final wallet = ref.watch(walletProvider);
     final liveProfile = ref.watch(profileProvider);
     final user = liveProfile.asData?.value ?? ref.watch(currentUserProvider);
@@ -30,136 +39,169 @@ class DashboardScreen extends ConsumerWidget {
       data: (w) => w.ngnBalance,
       orElse: () => 0,
     );
-    final showAddMoney = balance < 50000; // Show only if balance < N50k
+    final showAddMoney = !_addMoneyClicked && (user?.showAddMoney ?? true);
 
     return WallpaperScaffold(
       darken: 0.35,
-      body: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Spacer(flex: 1),
-            // Bell with red dot
-            Align(
-              alignment: Alignment.centerRight,
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  IconButton(
-                    onPressed: () => context.push(Routes.notifications),
-                    icon: SvgPicture.asset(
-                      Assets.notificationCenter,
-                      fit: BoxFit.contain,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 40),
-            // "🏠 Home" title — long-press opens the Dev menu
-            Padding(
-              padding: const EdgeInsets.only(left: 24),
-              child: GestureDetector(
-                onLongPress: () => context.push(Routes.devMenu),
-                behavior: HitTestBehavior.opaque,
-                child: Row(
-                  children: [
-                    SvgPicture.asset(Assets.home, fit: BoxFit.contain),
-                    const SizedBox(width: 10),
-                    Text(
-                      'Home',
-                      style: AppTypography.displayLarge.copyWith(
-                        color: Colors.white,
-                        fontSize: 30,
-                        fontWeight: FontWeight.w600,
+      body: RefreshIndicator(
+        onRefresh: () async {
+          ref.invalidate(walletProvider);
+          ref.invalidate(profileProvider);
+          await Future.wait([
+            ref.read(walletProvider.future),
+            ref.read(profileProvider.future),
+          ]);
+        },
+        child: LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: IntrinsicHeight(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Spacer(flex: 1),
+                      // Bell with red dot
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            IconButton(
+                              onPressed: () =>
+                                  context.push(Routes.notifications),
+                              icon: SvgPicture.asset(
+                                Assets.notificationCenter,
+                                fit: BoxFit.contain,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 40),
+                      // Home title.
+                      Padding(
+                        padding: const EdgeInsets.only(left: 24),
+                        child: Row(
+                          children: [
+                            SvgPicture.asset(Assets.home, fit: BoxFit.contain),
+                            const SizedBox(width: 10),
+                            Text(
+                              'Home',
+                              style: AppTypography.displayLarge.copyWith(
+                                color: Colors.white,
+                                fontSize: 30,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 50),
+                      _BalanceWidget(
+                        user: user,
+                        balance: balance,
+                        showAddMoney: showAddMoney,
+                        onAddMoney: () => _openAddMoney(context, user, balance),
+                      ),
+                      const SizedBox(height: 32), // Equal spacing
+                      // App icon grid
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          _HomeAppIcon(
+                            label: 'Settings',
+                            // background: const Color(0xFF1A1A1A),
+                            onTap: () => context.push(Routes.settings),
+                            iconScale: 1,
+                            child: SvgPicture.asset(
+                              Assets.settingsBadge,
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                          _HomeAppIcon(
+                            label: 'Support',
+                            background: const Color(0xFF1976FF),
+                            iconScale: 1,
+                            onTap: () => context.push(Routes.support),
+                            child: Image.asset(
+                              Assets.appIconSupport,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                          _HomeAppIcon(
+                            label: 'Transfa',
+                            background: const Color(0xFF1A1A1A),
+                            onTap: () => context.push(Routes.amount),
+                            child: const TransfaMark(size: 32, white: true),
+                          ),
+                          _HomeAppIcon(
+                            label: 'CashDrop',
+                            iconScale: 1,
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF00C2FF), Color(0xFF006EFF)],
+                            ),
+                            svgAsset: Assets.cashDropHome,
+                            onTap: () => _showCashDropPopup(context),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          _HomeAppIcon(
+                            label: 'Wallet',
+                            background: const Color(0xFF1A1A1A),
+                            iconScale: 1,
+                            onTap: () => context.push(Routes.walletWidget),
+                            child: SvgPicture.asset(
+                              Assets.transfaWallet,
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const Spacer(),
+                    ],
+                  ),
                 ),
               ),
             ),
-            const SizedBox(height: 50),
-            _BalanceWidget(
-              user: user,
-              balance: balance,
-              showAddMoney: showAddMoney,
-              onAddMoney: () =>
-                  _showViewBalancePopup(context, ref, user, balance),
-            ),
-            const SizedBox(height: 32), // Equal spacing
-            // App icon grid
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _HomeAppIcon(
-                  label: 'Settings',
-                  // background: const Color(0xFF1A1A1A),
-                  onTap: () => context.push(Routes.settings),
-                  iconScale: 1,
-                  child: SvgPicture.asset(
-                    Assets.settingsBadge,
-                    fit: BoxFit.contain,
-                  ),
-                ),
-                _HomeAppIcon(
-                  label: 'Support',
-                  background: const Color(0xFF1976FF),
-                  iconScale: 1,
-                  onTap: () => context.push(Routes.support),
-                  child: Image.asset(Assets.appIconSupport, fit: BoxFit.cover),
-                ),
-                _HomeAppIcon(
-                  label: 'Transfa',
-                  background: const Color(0xFF1A1A1A),
-                  onTap: () => context.push(Routes.amount),
-                  child: const TransfaMark(size: 32, white: true),
-                ),
-                _HomeAppIcon(
-                  label: 'CashDrop',
-                  iconScale: 1,
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF00C2FF), Color(0xFF006EFF)],
-                  ),
-                  svgAsset: Assets.cashDropHome,
-                  onTap: () => _showCashDropPopup(context),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _HomeAppIcon(
-                  label: 'Wallet',
-                  background: const Color(0xFF1A1A1A),
-                  iconScale: 1,
-                  onTap: () => context.push(Routes.walletWidget),
-                  child: SvgPicture.asset(
-                    Assets.transfaWallet,
-                    fit: BoxFit.contain,
-                  ),
-                ),
-              ],
-            ),
-            const Spacer(),
-            Center(
-              child: GestureDetector(
-                onTap: () => context.push(Routes.devMenu),
-                child: Text(
-                  'Tap to open Dev menu • long-press Home title for same',
-                  style: AppTypography.caption.copyWith(
-                    color: Colors.white.withValues(alpha: 0.9),
-                    fontSize: 14,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
+          ),
         ),
       ),
     );
+  }
+
+  Future<void> _openAddMoney(
+    BuildContext context,
+    AppUser? user,
+    num balance,
+  ) async {
+    if (!_addMoneyClicked && (user?.showAddMoney ?? true)) {
+      setState(() => _addMoneyClicked = true);
+      final updated = user?.copyWith(showAddMoney: false);
+      if (updated != null) {
+        ref.read(currentUserProvider.notifier).state = updated;
+      }
+      try {
+        await ref.read(walletRepositoryProvider).markAddMoneyClicked();
+        ref.invalidate(profileProvider);
+      } catch (error) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
+        }
+      }
+    }
+    if (context.mounted) {
+      await _showViewBalancePopup(context, ref, user, balance);
+    }
   }
 
   Future<void> _showViewBalancePopup(
@@ -226,20 +268,12 @@ class DashboardScreen extends ConsumerWidget {
         user: user,
         balance: displayedBalance,
         dva: dva,
-        onShareTap: () {
-          Navigator.of(context).pop();
-          _showTransfaAccountFoundPopup(context);
-        },
         onCashDropTap: () {
           Navigator.of(context).pop();
           _showCashDropPopup(context);
         },
       ),
     );
-  }
-
-  void _showTransfaAccountFoundPopup(BuildContext context) {
-    context.push(Routes.shareAccount);
   }
 
   void _showCashDropPopup(BuildContext context) {

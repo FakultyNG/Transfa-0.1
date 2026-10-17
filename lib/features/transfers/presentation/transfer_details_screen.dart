@@ -2,17 +2,19 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/router/routes.dart';
+import '../../../core/constants/assets.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../../data/models/bank.dart';
 import '../../../data/models/transaction.dart';
 import '../../../data/repositories/repositories.dart';
-import '../../../shared/widgets/app_input.dart';
-import '../../../shared/widgets/app_scaffold.dart';
 import '../../../shared/widgets/primary_button.dart';
+import '../../../shared/widgets/transfa_modal_header.dart';
 import 'transfer_state.dart';
 
 class TransferDetailsScreen extends ConsumerStatefulWidget {
@@ -168,9 +170,8 @@ class _TransferDetailsScreenState extends ConsumerState<TransferDetailsScreen> {
       });
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(userFacingError(error))));
     }
   }
 
@@ -244,9 +245,8 @@ class _TransferDetailsScreenState extends ConsumerState<TransferDetailsScreen> {
       if (mounted) context.push(Routes.transferConfirm);
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(userFacingError(error))));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -254,6 +254,7 @@ class _TransferDetailsScreenState extends ConsumerState<TransferDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final draft = ref.watch(transferDraftProvider);
     final isForeign = _isForeign;
     final canContinue =
         _account.text.trim().isNotEmpty &&
@@ -264,111 +265,229 @@ class _TransferDetailsScreenState extends ConsumerState<TransferDetailsScreen> {
                   _country.text.trim().isNotEmpty
             : _selectedBank != null);
 
-    return AppScaffold(
-      appBar: AppBar(title: const Text('Recipient')),
-      body: ListView(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        children: [
-          Text(
-            isForeign
-                ? 'Enter the supplier banking details.'
-                : 'Enter and verify the recipient account.',
-            style: AppTypography.bodyMuted,
-          ),
-          const SizedBox(height: 24),
-          AppInput(
-            label: 'Recipient name',
-            hint: 'Full legal name',
-            controller: _name,
-            capitalization: TextCapitalization.words,
-            enabled: isForeign,
-            onChanged: (_) => setState(() {}),
-          ),
-          const SizedBox(height: 16),
-          AppInput(
-            label: 'Account number',
-            hint: isForeign
-                ? 'Beneficiary account number'
-                : '10-digit account number',
-            controller: _account,
-            keyboardType: TextInputType.number,
-            maxLength: isForeign ? null : 10,
-            onChanged: _onAccountChanged,
-          ),
-          if (_beneficiaries.isNotEmpty || _bankSuggestions.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            ..._beneficiaries.map(
-              (beneficiary) => ListTile(
-                dense: true,
-                leading: const Icon(Icons.history_rounded),
-                title: Text(beneficiary.displayName),
-                subtitle: Text(
-                  '${beneficiary.bankName} · ${beneficiary.accountNumber}',
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+          children: [
+            TransfaModalHeader(onClose: () => context.pop()),
+            const SizedBox(height: 34),
+            Row(
+              children: [
+                Text(
+                  'To:',
+                  style: AppTypography.subheading.copyWith(
+                    color: AppColors.textMuted,
+                    fontSize: 22,
+                  ),
                 ),
-                onTap: () => _selectBeneficiary(beneficiary),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    controller: _account,
+                    keyboardType: TextInputType.number,
+                    maxLength: isForeign ? null : 10,
+                    onChanged: _onAccountChanged,
+                    style: AppTypography.subheading.copyWith(fontSize: 22),
+                    decoration: InputDecoration(
+                      counterText: '',
+                      hintText: 'Account number…',
+                      hintStyle: AppTypography.subheading.copyWith(
+                        color: AppColors.textMuted,
+                        fontSize: 22,
+                      ),
+                      border: InputBorder.none,
+                    ),
+                  ),
+                ),
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: const BoxDecoration(
+                    color: AppColors.success,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.person_rounded,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                ),
+              ],
+            ),
+            if (_name.text.trim().isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(left: 48, bottom: 8),
+                child: Text(
+                  _name.text.trim(),
+                  style: AppTypography.body.copyWith(
+                    color: AppColors.success,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+            const Divider(color: Color(0xFFE0E0E0)),
+            if (_beneficiaries.isNotEmpty || _bankSuggestions.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              ..._beneficiaries.map(
+                (beneficiary) => ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.history_rounded),
+                  title: Text(beneficiary.displayName),
+                  subtitle: Text(
+                    '${beneficiary.bankName} · ${beneficiary.accountNumber}',
+                  ),
+                  onTap: () => _selectBeneficiary(beneficiary),
+                ),
+              ),
+              ..._bankSuggestions.map(
+                (suggestion) => ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.account_balance_rounded),
+                  title: Text(suggestion.accountName),
+                  subtitle: Text(
+                    '${suggestion.bankName} · ${suggestion.confidence.toStringAsFixed(0)}% match',
+                  ),
+                  onTap: () => _selectSuggestion(suggestion),
+                ),
+              ),
+            ],
+            InkWell(
+              onTap: isForeign ? null : _chooseBank,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: const BoxDecoration(
+                        color: AppColors.success,
+                        shape: BoxShape.circle,
+                      ),
+                      padding: const EdgeInsets.all(11),
+                      child: SvgPicture.asset(
+                        Assets.bankBlack,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: isForeign
+                          ? TextField(
+                              controller: _bank,
+                              onChanged: (_) => setState(() {}),
+                              decoration: const InputDecoration(
+                                hintText: 'Beneficiary bank',
+                                border: InputBorder.none,
+                              ),
+                            )
+                          : Text(
+                              _selectedBank?.name ?? 'Bank Center',
+                              style: AppTypography.subheading.copyWith(
+                                color: _selectedBank == null
+                                    ? AppColors.textMuted
+                                    : Colors.black,
+                                fontSize: 22,
+                              ),
+                            ),
+                    ),
+                    const Icon(
+                      Icons.unfold_more_rounded,
+                      color: AppColors.textMuted,
+                      size: 26,
+                    ),
+                  ],
+                ),
               ),
             ),
-            ..._bankSuggestions.map(
-              (suggestion) => ListTile(
-                dense: true,
-                leading: const Icon(Icons.account_balance_rounded),
-                title: Text(suggestion.accountName),
-                subtitle: Text(
-                  '${suggestion.bankName} · ${suggestion.confidence.toStringAsFixed(0)}% match',
-                ),
-                onTap: () => _selectSuggestion(suggestion),
+            const Divider(color: Color(0xFFE0E0E0)),
+            if (isForeign) ...[
+              const SizedBox(height: 16),
+              _LineInput(controller: _name, hint: 'Recipient legal name'),
+              _LineInput(controller: _swift, hint: 'SWIFT / BIC'),
+              _LineInput(
+                controller: _routing,
+                hint: 'Routing number (optional)',
+              ),
+              _LineInput(controller: _country, hint: 'Recipient country'),
+            ],
+            const SizedBox(height: 28),
+            Text(
+              'Send',
+              style: AppTypography.subheading.copyWith(
+                color: AppColors.textMuted,
+                fontSize: 22,
               ),
             ),
+            const SizedBox(height: 6),
+            Text(
+              '${_currency == TxCurrency.ngn
+                  ? '₦'
+                  : _currency == TxCurrency.usd
+                  ? '\$'
+                  : '¥'}${draft.amount?.toStringAsFixed(2) ?? '0.00'}',
+              style: AppTypography.displayLarge.copyWith(
+                fontSize: 48,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 28),
+            const Divider(color: Color(0xFFE0E0E0)),
+            Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: const BoxDecoration(
+                    color: AppColors.success,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.chat_bubble_rounded,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: TextField(
+                    controller: _memo,
+                    decoration: const InputDecoration(
+                      hintText: "What's the money for?",
+                      border: InputBorder.none,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const Divider(color: Color(0xFFE0E0E0)),
+            const SizedBox(height: 28),
+            PrimaryButton(
+              label: 'Touch to Continue',
+              loading: _loading,
+              onPressed: canContinue ? _next : null,
+            ),
           ],
-          const SizedBox(height: 16),
-          AppInput(
-            label: 'Bank',
-            hint: isForeign ? 'Beneficiary bank' : 'Choose bank',
-            controller: _bank,
-            readOnly: !isForeign,
-            onTap: isForeign ? null : _chooseBank,
-            trailing: isForeign ? null : const Icon(Icons.expand_more_rounded),
-            onChanged: (_) => setState(() {}),
-          ),
-          if (isForeign) ...[
-            const SizedBox(height: 16),
-            AppInput(
-              label: 'SWIFT / BIC',
-              hint: 'BOFAUS3N',
-              controller: _swift,
-              capitalization: TextCapitalization.characters,
-              onChanged: (_) => setState(() {}),
-            ),
-            const SizedBox(height: 16),
-            AppInput(
-              label: 'Routing number',
-              hint: 'Optional where not required',
-              controller: _routing,
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 16),
-            AppInput(
-              label: 'Recipient country',
-              hint: _currency == TxCurrency.cny ? 'China' : 'US',
-              controller: _country,
-              capitalization: TextCapitalization.characters,
-              onChanged: (_) => setState(() {}),
-            ),
-          ],
-          const SizedBox(height: 16),
-          AppInput(
-            label: isForeign ? 'Payment reference' : 'Narration',
-            hint: isForeign ? 'Invoice or supplier reference' : 'TF Transfer',
-            controller: _memo,
-          ),
-          const SizedBox(height: 28),
-          PrimaryButton(
-            label: 'Continue',
-            loading: _loading,
-            onPressed: canContinue ? _next : null,
-          ),
-        ],
+        ),
       ),
     );
   }
+}
+
+class _LineInput extends StatelessWidget {
+  const _LineInput({required this.controller, required this.hint});
+
+  final TextEditingController controller;
+  final String hint;
+
+  @override
+  Widget build(BuildContext context) => TextField(
+    controller: controller,
+    decoration: InputDecoration(
+      hintText: hint,
+      border: const UnderlineInputBorder(),
+    ),
+  );
 }

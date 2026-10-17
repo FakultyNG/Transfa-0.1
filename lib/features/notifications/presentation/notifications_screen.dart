@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -61,14 +62,26 @@ class NotificationsScreen extends ConsumerWidget {
               child: CustomScrollView(
                 slivers: [
                   SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(24, 28, 24, 18),
+                    padding: const EdgeInsets.fromLTRB(34, 24, 34, 22),
                     sliver: SliverToBoxAdapter(
-                      child: Text(
-                        'Notifications',
-                        style: AppTypography.displayLarge.copyWith(
-                          color: Colors.white,
-                          fontSize: 34,
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SizedBox(
+                            width: 60,
+                            height: 60,
+                            child: SvgPicture.asset(Assets.notifications),
+                          ),
+                          const SizedBox(height: 18),
+                          Text(
+                            'Notifications',
+                            style: AppTypography.displayLarge.copyWith(
+                              color: Colors.white,
+                              fontSize: 36,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -98,11 +111,11 @@ class NotificationsScreen extends ConsumerWidget {
                             ),
                           )
                         : SliverPadding(
-                            padding: const EdgeInsets.fromLTRB(20, 0, 20, 110),
+                            padding: const EdgeInsets.fromLTRB(34, 0, 34, 120),
                             sliver: SliverList(
                               delegate: SliverChildBuilderDelegate(
                                 (context, index) => Padding(
-                                  padding: const EdgeInsets.only(bottom: 10),
+                                  padding: const EdgeInsets.only(bottom: 16),
                                   child: _NotificationTile(
                                     notification: items[index],
                                     onTap: () => _openNotification(
@@ -128,8 +141,8 @@ class NotificationsScreen extends ConsumerWidget {
             right: 20,
             bottom: 24,
             child: SafeArea(
-              child: FilledButton.icon(
-                onPressed: () async {
+              child: GestureDetector(
+                onTap: () async {
                   try {
                     await ref
                         .read(notificationRepositoryProvider)
@@ -143,8 +156,38 @@ class NotificationsScreen extends ConsumerWidget {
                     );
                   }
                 },
-                icon: const Icon(Icons.done_all_rounded),
-                label: const Text('Mark all read'),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(34),
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(10, 10, 22, 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(34),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.35),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 32,
+                          height: 32,
+                          child: SvgPicture.asset(Assets.markAsRead),
+                        ),
+                        const SizedBox(width: 7),
+                        Text(
+                          'Done',
+                          style: AppTypography.subheading.copyWith(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -175,26 +218,31 @@ class _NotificationTile extends StatelessWidget {
     };
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(45),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: Colors.white.withValues(
             alpha: notification.isRead ? 0.08 : 0.16,
           ),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.white24),
+          borderRadius: BorderRadius.circular(45),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.30)),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              width: 10,
-              height: 10,
-              margin: const EdgeInsets.only(top: 6),
-              decoration: BoxDecoration(
-                color: notification.isRead ? Colors.transparent : color,
-                shape: BoxShape.circle,
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              child: Icon(
+                notification.category == 'security'
+                    ? Icons.lock_rounded
+                    : notification.category == 'transactions'
+                    ? Icons.swap_horiz_rounded
+                    : Icons.notifications_rounded,
+                color: Colors.white,
+                size: 23,
               ),
             ),
             const SizedBox(width: 12),
