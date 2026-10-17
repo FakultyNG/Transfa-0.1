@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -29,17 +30,45 @@ class DashboardScreen extends ConsumerStatefulWidget {
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   bool _addMoneyClicked = false;
+  Timer? _unreadPoller;
+
+  @override
+  void initState() {
+    super.initState();
+    _unreadPoller = Timer.periodic(const Duration(seconds: 15), (_) {
+      ref.invalidate(notificationsProvider);
+      ref.invalidate(unreadSupportCountProvider);
+    });
+  }
+
+  @override
+  void dispose() {
+    _unreadPoller?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final wallet = ref.watch(walletProvider);
     final liveProfile = ref.watch(profileProvider);
-    final user = liveProfile.asData?.value ?? ref.watch(currentUserProvider);
+    final sessionUser = ref.watch(currentUserProvider);
+    final fetchedProfile = liveProfile.asData?.value;
+    final user = fetchedProfile?.id == sessionUser?.id
+        ? fetchedProfile
+        : sessionUser;
     final balance = wallet.maybeWhen(
       data: (w) => w.ngnBalance,
       orElse: () => 0,
     );
     final showAddMoney = !_addMoneyClicked && (user?.showAddMoney ?? true);
+    final hasUnreadNotifications =
+        ref
+            .watch(notificationsProvider)
+            .valueOrNull
+            ?.any((notification) => !notification.isRead) ??
+        false;
+    final unreadSupportCount =
+        ref.watch(unreadSupportCountProvider).valueOrNull ?? 0;
 
     return WallpaperScaffold(
       darken: 0.35,
@@ -47,9 +76,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         onRefresh: () async {
           ref.invalidate(walletProvider);
           ref.invalidate(profileProvider);
+          ref.invalidate(notificationsProvider);
+          ref.invalidate(unreadSupportCountProvider);
           await Future.wait([
             ref.read(walletProvider.future),
             ref.read(profileProvider.future),
+            ref.read(notificationsProvider.future),
+            ref.read(unreadSupportCountProvider.future),
           ]);
         },
         child: LayoutBuilder(
@@ -78,6 +111,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                 fit: BoxFit.contain,
                               ),
                             ),
+                            if (hasUnreadNotifications)
+                              Positioned(
+                                right: 7,
+                                top: 7,
+                                child: Container(
+                                  width: 9,
+                                  height: 9,
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFFF41E42),
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
                       ),
@@ -124,6 +170,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           ),
                           _HomeAppIcon(
                             label: 'Support',
+                            badgeCount: unreadSupportCount,
                             background: const Color(0xFF1976FF),
                             iconScale: 1,
                             onTap: () => context.push(Routes.support),
@@ -420,6 +467,7 @@ class _HomeAppIcon extends StatelessWidget {
   final Gradient? gradient;
   final double iconScale;
   final VoidCallback? onTap;
+  final int badgeCount;
 
   const _HomeAppIcon({
     required this.label,
@@ -429,6 +477,7 @@ class _HomeAppIcon extends StatelessWidget {
     this.gradient,
     this.iconScale = 0.55,
     this.onTap,
+    this.badgeCount = 0,
   });
 
   @override
@@ -439,32 +488,62 @@ class _HomeAppIcon extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(
-              color: background,
-              gradient: gradient,
-              borderRadius: BorderRadius.circular(18),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.18),
-                  blurRadius: 6,
-                  offset: const Offset(0, 3),
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  color: background,
+                  gradient: gradient,
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.18),
+                      blurRadius: 6,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: Center(
-              child: SizedBox(
-                width: 66 * iconScale,
-                height: 66 * iconScale,
-                child:
-                    child ??
-                    (svgAsset != null
-                        ? SvgPicture.asset(svgAsset!, fit: BoxFit.contain)
-                        : const SizedBox.shrink()),
+                child: Center(
+                  child: SizedBox(
+                    width: 66 * iconScale,
+                    height: 66 * iconScale,
+                    child:
+                        child ??
+                        (svgAsset != null
+                            ? SvgPicture.asset(svgAsset!, fit: BoxFit.contain)
+                            : const SizedBox.shrink()),
+                  ),
+                ),
               ),
-            ),
+              if (badgeCount > 0)
+                Positioned(
+                  right: -7,
+                  top: -7,
+                  child: Container(
+                    constraints: const BoxConstraints(minWidth: 22),
+                    height: 22,
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF41E42),
+                      borderRadius: BorderRadius.circular(11),
+                      border: Border.all(color: Colors.white, width: 1.5),
+                    ),
+                    child: Text(
+                      badgeCount > 99 ? '99+' : '$badgeCount',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        height: 1,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 6),
           Text(

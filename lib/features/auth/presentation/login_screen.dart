@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:local_auth/local_auth.dart';
 
 import '../../../core/router/routes.dart';
+import '../../../core/security/app_lock_state.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/error_messages.dart';
@@ -41,7 +42,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           .read(authRepositoryProvider)
           .login(_phone.text.replaceAll(' ', ''), _passcode.text);
       ref.read(currentUserProvider.notifier).state = user;
-      if (mounted) context.go(Routes.dashboard);
+      final destination = unlockAppAndTakePendingRoute(ref);
+      if (mounted) context.go(destination);
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -64,7 +66,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           .read(deviceFeaturesRepositoryProvider)
           .biometricLogin(await DeviceIdentity().getOrCreate());
       ref.read(currentUserProvider.notifier).state = user;
-      if (mounted) context.go(Routes.dashboard);
+      final destination = unlockAppAndTakePendingRoute(ref);
+      if (mounted) context.go(destination);
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(

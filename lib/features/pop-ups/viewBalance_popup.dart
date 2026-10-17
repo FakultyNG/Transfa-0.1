@@ -9,7 +9,6 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/constants/assets.dart';
-import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../data/models/user.dart';
 import '../../../data/models/wallet.dart';
@@ -73,6 +72,7 @@ class _ViewBalancePopupState extends State<ViewBalancePopup>
 
   Future<void> _shareAccountCard() async {
     try {
+      await WidgetsBinding.instance.endOfFrame;
       final boundary =
           _shareCardKey.currentContext?.findRenderObject()
               as RenderRepaintBoundary?;

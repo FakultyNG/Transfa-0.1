@@ -316,8 +316,7 @@ class ReceiptInReviewScreen extends ConsumerWidget {
       supportMemo: _SupportMemoData(
         title: 'Support Memo',
         timer: '23:44:02',
-        body:
-            'Add your BVN and residential address to complete this transaction and raise your money limits to ₦5 Million Naira.',
+        body: 'Add your BVN and residential address to complete this transaction and raise your money limits to ₦5 Million Naira.',
         actions: [
           _ReceiptAction(
             label: 'Add NIN',
@@ -405,6 +404,7 @@ class TransferReceiptScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final received = transaction.type == TxType.credit;
     final status = switch (transaction.status) {
       TxStatus.success => _ReceiptStatus.done,
       TxStatus.pending => _ReceiptStatus.processing,
@@ -422,10 +422,13 @@ class TransferReceiptScreen extends StatelessWidget {
           ? 'Transfer could not be sent'
           : transaction.status == TxStatus.pending
           ? 'Transfer is processing'
+          : received
+          ? 'Received from $recipientName'
           : 'Sent to $recipientName',
       recipient: _ReceiptRecipient(
         name: recipientName,
         avatarColor: const Color(0xFF16A34A),
+        networkImage: transaction.counterpartyProfileImageUrl,
       ),
       memo: memo.isEmpty ? 'Naira transfer' : memo,
       status: status,
@@ -437,6 +440,10 @@ class TransferReceiptScreen extends StatelessWidget {
       accountNumber: accountNumber,
       createdAt: transaction.createdAt,
       transactionReference: transaction.reference ?? transaction.id,
+      supportMessage:
+          'I need help with transaction ${transaction.reference ?? transaction.id}: '
+          '${received ? 'received from' : 'sent to'} $recipientName, '
+          '${AppFormat.ngn(transaction.amount)}, status ${transaction.status.name}.',
     );
   }
 }
@@ -454,12 +461,14 @@ class _ReceiptRecipient {
   final String? assetImage;
   final Color? avatarColor;
   final bool businessIcon;
+  final String? networkImage;
 
   const _ReceiptRecipient({
     required this.name,
     this.assetImage,
     this.avatarColor,
     this.businessIcon = false,
+    this.networkImage,
   });
 }
 
@@ -486,6 +495,7 @@ class _ReceiptPage extends StatelessWidget {
   final String? accountNumber;
   final DateTime? createdAt;
   final String? transactionReference;
+  final String? supportMessage;
 
   const _ReceiptPage({
     required this.amount,
@@ -506,6 +516,7 @@ class _ReceiptPage extends StatelessWidget {
     this.accountNumber,
     this.createdAt,
     this.transactionReference,
+    this.supportMessage,
   });
 
   void _showProgressPopup(BuildContext context) {
@@ -708,7 +719,8 @@ class _ReceiptPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 22),
                 GestureDetector(
-                  onTap: () => (context.push(Routes.supportChat)),
+                  onTap: () =>
+                      context.push(Routes.supportChat, extra: supportMessage),
                   child: _hPad(
                     supportStyle == _ReceiptSupportStyle.row
                         ? const _GetSupportCard()
@@ -767,6 +779,12 @@ class _RecipientPill extends StatelessWidget {
           color: Colors.white,
           size: 28,
         ),
+      );
+    } else if (recipient.networkImage != null) {
+      avatar = CircleAvatar(
+        radius: 24,
+        backgroundColor: Colors.grey.shade300,
+        backgroundImage: NetworkImage(recipient.networkImage!),
       );
     } else if (recipient.assetImage != null) {
       avatar = CircleAvatar(

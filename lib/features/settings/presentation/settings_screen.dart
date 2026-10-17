@@ -20,7 +20,11 @@ class SettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final liveProfile = ref.watch(profileProvider);
-    final user = liveProfile.asData?.value ?? ref.watch(currentUserProvider);
+    final sessionUser = ref.watch(currentUserProvider);
+    final fetchedProfile = liveProfile.asData?.value;
+    final user = fetchedProfile?.id == sessionUser?.id
+        ? fetchedProfile
+        : sessionUser;
     final fullName = user?.fullName.trim() ?? '';
     return Scaffold(
       backgroundColor: AppColors.background,

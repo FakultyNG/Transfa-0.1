@@ -89,6 +89,12 @@ class AuthRepository {
   Future<void> logout() => _api.logout();
   Future<AppUser> getProfile() => _api.getProfile();
   Future<Map<String, dynamic>> verifyNin(String nin) => _api.verifyNin(nin);
+  Future<Map<String, dynamic>> confirmNinOtp({
+    required String otpReference,
+    required String otp,
+  }) => _api.confirmNinOtp(otpReference: otpReference, otp: otp);
+  Future<Map<String, dynamic>> resendNinOtp(String otpReference) =>
+      _api.resendNinOtp(otpReference);
   Future<void> changePasscode({
     required String oldPasscode,
     required String newPasscode,
@@ -195,9 +201,12 @@ final currentUserProvider = StateProvider<AppUser?>((_) => null);
 final registrationSessionProvider = StateProvider<RegistrationSession?>(
   (_) => null,
 );
-final profileProvider = FutureProvider<AppUser>(
-  (ref) => ref.watch(authRepositoryProvider).getProfile(),
-);
+final profileProvider = FutureProvider<AppUser>((ref) {
+  // Recreate the provider for every authenticated account so Riverpod can
+  // never reuse the previous account's completed profile response.
+  ref.watch(currentUserProvider.select((user) => user?.id));
+  return ref.watch(authRepositoryProvider).getProfile();
+});
 final kycStatusProvider = FutureProvider<Map<String, dynamic>>(
   (ref) => ref.watch(authRepositoryProvider).getKycStatus(),
 );
@@ -412,6 +421,8 @@ class NotificationRepository {
   Future<List<AppNotification>> list() => _api.listNotifications();
   Future<void> markRead(String id) => _api.markNotificationRead(id);
   Future<void> markAllRead() => _api.markAllNotificationsRead();
+  Future<int> unreadSupportCount() => _api.getUnreadSupportCount();
+  Future<void> markAllSupportRead() => _api.markAllSupportNotificationsRead();
   Future<void> registerDeviceToken({
     required String deviceId,
     required String fcmToken,
@@ -430,6 +441,9 @@ final notificationRepositoryProvider = Provider(
 );
 final notificationsProvider = FutureProvider<List<AppNotification>>(
   (ref) => ref.watch(notificationRepositoryProvider).list(),
+);
+final unreadSupportCountProvider = FutureProvider<int>(
+  (ref) => ref.watch(notificationRepositoryProvider).unreadSupportCount(),
 );
 
 class SupportRepository {

@@ -292,6 +292,20 @@ class MockApi implements TransfaApi {
   });
 
   @override
+  Future<Map<String, dynamic>> confirmNinOtp({
+    required String otpReference,
+    required String otp,
+  }) => _delay({
+    'ninVerified': true,
+    'otpRequired': false,
+    'accountTier': 'captain',
+  });
+
+  @override
+  Future<Map<String, dynamic>> resendNinOtp(String otpReference) =>
+      _delay({'otpReference': otpReference, 'maskedPhone': '*******0000'});
+
+  @override
   Future<List<Bank>> getNgnBanks() => _delay(const [
     Bank(code: '044', name: 'Access Bank'),
     Bank(code: '058', name: 'GTBank'),
@@ -562,6 +576,36 @@ class MockApi implements TransfaApi {
   @override
   Future<void> markAllNotificationsRead() async {
     await _delay(true);
+  }
+
+  @override
+  Future<int> getUnreadSupportCount() async => _notifications
+      .where(
+        (notification) =>
+            notification.category == 'support' && !notification.isRead,
+      )
+      .length;
+
+  @override
+  Future<void> markAllSupportNotificationsRead() async {
+    for (var index = 0; index < _notifications.length; index++) {
+      final item = _notifications[index];
+      if (item.category == 'support' && !item.isRead) {
+        _notifications[index] = AppNotification(
+          id: item.id,
+          type: item.type,
+          category: item.category,
+          header: item.header,
+          body: item.body,
+          isRead: true,
+          createdAt: item.createdAt,
+          subHeader: item.subHeader,
+          deepLink: item.deepLink,
+          ctaText: item.ctaText,
+          ctaUrl: item.ctaUrl,
+        );
+      }
+    }
   }
 
   @override

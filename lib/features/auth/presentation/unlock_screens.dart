@@ -19,6 +19,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/assets.dart';
 import '../../../shared/widgets/pill_button.dart';
 import '../../../core/router/routes.dart';
+import '../../../core/security/app_lock_state.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../shared/widgets/keypad_button.dart';
 import '../../../shared/widgets/wallpaper_scaffold.dart';
@@ -263,12 +264,14 @@ class _UnlockPasscodeScreenState extends ConsumerState<UnlockPasscodeScreen> {
         }
         final user = await repository.login(phone, _code);
         ref.read(currentUserProvider.notifier).state = user;
-        if (mounted) context.go(Routes.dashboard);
+        final destination = unlockAppAndTakePendingRoute(ref);
+        if (mounted) context.go(destination);
       } catch (error) {
         if (!mounted) return;
         setState(() => _code = '');
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(userFacingError(error))));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
       } finally {
         if (mounted) setState(() => _loading = false);
       }
@@ -679,7 +682,8 @@ class _FaceShotUnlockScreenState extends ConsumerState<FaceShotUnlockScreen>
             faceImageBase64: 'data:image/jpeg;base64,${base64Encode(bytes)}',
           );
       ref.read(currentUserProvider.notifier).state = user;
-      if (mounted) context.go(Routes.dashboard);
+      final destination = unlockAppAndTakePendingRoute(ref);
+      if (mounted) context.go(destination);
     } catch (error) {
       if (!mounted) return;
       final apiError = error is ApiException ? error : null;
@@ -1309,8 +1313,9 @@ class _ForgotPasscodeScreenState extends ConsumerState<ForgotPasscodeScreen> {
       );
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(userFacingError(error))));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -1597,8 +1602,9 @@ class _RecoveryStartkeyScreenState
     } catch (error) {
       if (!mounted) return;
       _otp.clear();
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(userFacingError(error))));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -1621,8 +1627,9 @@ class _RecoveryStartkeyScreenState
       }
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(userFacingError(error))));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
     } finally {
       if (mounted) setState(() => _loading = false);
     }

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:transfa/core/constants/assets.dart';
 
 import '../../../core/router/routes.dart';
+import '../../../core/security/app_lock_state.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../../data/repositories/repositories.dart';
@@ -80,6 +81,7 @@ class _CreatePinScreenState extends ConsumerState<CreatePinScreen> {
               );
           await ref.read(sessionStoreProvider).markOnboardingCompleted();
           ref.read(currentUserProvider.notifier).state = user;
+          ref.read(appUnlockedProvider.notifier).state = true;
           ref.read(registrationSessionProvider.notifier).state = null;
           if (!mounted) return;
           context.go(Routes.welcome);
@@ -91,8 +93,9 @@ class _CreatePinScreenState extends ConsumerState<CreatePinScreen> {
             _confirm = '';
             _confirming = false;
           });
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text(userFacingError(error))));
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
         }
       } else {
         // mismatch — reset both, stay on create step

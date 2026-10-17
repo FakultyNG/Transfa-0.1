@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -5,7 +7,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/assets.dart';
 import '../../../core/router/routes.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../shared/widgets/glass_card.dart';
 import '../../../data/repositories/repositories.dart';
@@ -69,7 +70,7 @@ class LimitsScreen extends ConsumerWidget {
                       horizontal: 20,
                     ), // Add padding to the list itself
                     itemCount: _plans.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 16),
+                    separatorBuilder: (_, _) => const SizedBox(width: 16),
                     itemBuilder: (context, i) =>
                         _buildPlanCard(context, _plans[i], tier),
                   ),
@@ -151,7 +152,7 @@ class LimitsScreen extends ConsumerWidget {
           ),
         ),
         const Divider(color: Color(0x08000000), height: 1, thickness: 1),
-        _buildVerificationOptions(context, plan),
+        _buildVerificationOptions(context, plan, tier),
       ],
     ),
   );
@@ -178,39 +179,60 @@ class LimitsScreen extends ConsumerWidget {
           ),
         ),
         if (_tierRank(tier) >= _tierRank(plan.name.toLowerCase()))
-          Container(
-            width: 26,
-            height: 26,
-            decoration: BoxDecoration(borderRadius: BorderRadius.circular(35)),
-            child: SvgPicture.asset(Assets.checkRound, fit: BoxFit.cover),
-          ),
+          const _VerifiedTierBadge(),
       ],
     ),
   );
 
-  Widget _buildVerificationOptions(BuildContext context, _Plan plan) => Padding(
-    padding: const EdgeInsets.all(14),
-    child: Column(
-      children: plan.name == 'Prime'
-          ? [
-              _VerificationOption('Home', Assets.sweetHome, false),
-              const SizedBox(height: 10),
-              _VerificationOption('Face Shot', Assets.faceIDRound, true),
-              const SizedBox(height: 10),
-              _VerificationOption('Passport Photo', Assets.photoIDRound, true),
-            ]
-          : [
-              _VerificationOption(
-                plan.name == 'Citizen' ? 'BVN' : 'NIN',
-                plan.name == 'Citizen' ? Assets.cbnLogo : Assets.nimcLogo,
-                plan.name == 'Citizen',
-                onTap: plan.name == 'Captain'
-                    ? () => context.push(Routes.addNin)
-                    : null,
-              ),
-            ],
-    ),
-  );
+  Widget _buildVerificationOptions(
+    BuildContext context,
+    _Plan plan,
+    String tier,
+  ) {
+    final planVerified = _tierRank(tier) >= _tierRank(plan.name.toLowerCase());
+    return Padding(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        children: plan.name == 'Prime'
+            ? [
+                _VerificationOption(
+                  planVerified ? 'Verified' : 'Click to start',
+                  Assets.sweetHome,
+                  planVerified,
+                  onTap: planVerified
+                      ? null
+                      : () => context.push(
+                          Routes.supportChat,
+                          extra:
+                              'I want to upgrade my limits to the Prime tier',
+                        ),
+                ),
+                const SizedBox(height: 10),
+                _VerificationOption('Face Shot', Assets.faceIDRound, true),
+                const SizedBox(height: 10),
+                _VerificationOption(
+                  'Passport Photo',
+                  Assets.photoIDRound,
+                  true,
+                ),
+              ]
+            : [
+                _VerificationOption(
+                  plan.name == 'Citizen'
+                      ? 'BVN'
+                      : planVerified
+                      ? 'Verified'
+                      : 'NIN',
+                  plan.name == 'Citizen' ? Assets.cbnLogo : Assets.nimcLogo,
+                  plan.name == 'Citizen' || planVerified,
+                  onTap: plan.name == 'Captain' && !planVerified
+                      ? () => context.push(Routes.addNin)
+                      : null,
+                ),
+              ],
+      ),
+    );
+  }
 
   int _tierRank(String tier) => switch (tier) {
     'prime' => 3,
@@ -318,6 +340,55 @@ class _VerificationOption extends StatelessWidget {
       ),
     ),
   );
+}
+
+class _VerifiedTierBadge extends StatelessWidget {
+  const _VerifiedTierBadge();
+
+  @override
+  Widget build(BuildContext context) => CustomPaint(
+    size: const Size.square(27),
+    painter: _VerifiedTierBadgePainter(),
+  );
+}
+
+class _VerifiedTierBadgePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final outer = size.shortestSide / 2;
+    final inner = outer * 0.82;
+    final path = Path();
+    for (var index = 0; index < 24; index++) {
+      final radius = index.isEven ? outer : inner;
+      final angle = -math.pi / 2 + index * math.pi / 12;
+      final point = center + Offset(math.cos(angle), math.sin(angle)) * radius;
+      if (index == 0) {
+        path.moveTo(point.dx, point.dy);
+      } else {
+        path.lineTo(point.dx, point.dy);
+      }
+    }
+    path.close();
+    canvas.drawPath(path, Paint()..color = const Color(0xFF1D9BF0));
+
+    final check = Path()
+      ..moveTo(size.width * 0.28, size.height * 0.52)
+      ..lineTo(size.width * 0.44, size.height * 0.67)
+      ..lineTo(size.width * 0.73, size.height * 0.35);
+    canvas.drawPath(
+      check,
+      Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.4
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _BackFab extends StatelessWidget {

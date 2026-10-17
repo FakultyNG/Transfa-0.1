@@ -1,15 +1,66 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/assets.dart';
 import '../../../core/router/routes.dart';
+import '../../../data/api/api_exception.dart';
+import '../../../data/repositories/repositories.dart';
 import 'verify_code_screen.dart';
 
-/// "Verify Your NIN" — thin wrapper around [VerifyCodeScreen] with the
-/// NIMC tile icon + NIN-specific copy. The keypad in the underlying
-/// screen is hidden until the user taps the code-slot area.
-class VerifyNinScreen extends StatelessWidget {
-  const VerifyNinScreen({super.key});
+class NinOtpArgs {
+  const NinOtpArgs({required this.otpReference, required this.maskedPhone});
+
+  final String otpReference;
+  final String maskedPhone;
+}
+
+class VerifyNinScreen extends ConsumerStatefulWidget {
+  const VerifyNinScreen({super.key, required this.args});
+
+  final NinOtpArgs args;
+
+  @override
+  ConsumerState<VerifyNinScreen> createState() => _VerifyNinScreenState();
+}
+
+class _VerifyNinScreenState extends ConsumerState<VerifyNinScreen> {
+  late String _otpReference = widget.args.otpReference;
+  late String _maskedPhone = widget.args.maskedPhone;
+
+  Future<void> _confirm(String otp) async {
+    try {
+      await ref
+          .read(authRepositoryProvider)
+          .confirmNinOtp(otpReference: _otpReference, otp: otp);
+      ref.invalidate(profileProvider);
+      if (mounted) context.pop(true);
+    } catch (error) {
+      if (mounted && _supportRequired(error)) {
+        context.go(
+          Routes.supportChat,
+          extra: 'I need help upgrading my limit to captain tier',
+        );
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> _resend() async {
+    final result = await ref
+        .read(authRepositoryProvider)
+        .resendNinOtp(_otpReference);
+    if (!mounted) return;
+    setState(() {
+      _otpReference = result['otpReference']?.toString() ?? _otpReference;
+      _maskedPhone = result['maskedPhone']?.toString() ?? _maskedPhone;
+    });
+  }
+
+  bool _supportRequired(Object error) {
+    if (error is! ApiException || error.details is! Map) return false;
+    return (error.details as Map)['supportRequired'] == true;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -30,8 +81,9 @@ class VerifyNinScreen extends StatelessWidget {
         child: Image.asset(Assets.nimcLogo, fit: BoxFit.contain),
       ),
       title: 'Verify Your NIN',
-      subtitle: 'NIMC sent a verification code to\nyour phone: 4888.',
-      onVerified: () => context.push(Routes.identityPrivacy),
+      subtitle: 'A verification code was sent to\nyour phone: $_maskedPhone.',
+      onVerified: _confirm,
+      onResend: _resend,
     );
   }
 }

@@ -106,7 +106,14 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       slideRoute(Routes.identityBankPrivacy, const PrivacyBankScreen()),
       slideRoute(Routes.photoId, const PhotoIdScreen()),
       slideRoute(Routes.photoIdGuide, const PhotoIdGuideScreen()),
-      slideRoute(Routes.verifyNin, const VerifyNinScreen()),
+      GoRoute(
+        path: Routes.verifyNin,
+        pageBuilder: (context, state) => buildPageWithTransition(
+          state.extra is NinOtpArgs
+              ? VerifyNinScreen(args: state.extra as NinOtpArgs)
+              : const AddNinScreen(),
+        ),
+      ),
       slideRoute(Routes.addBvn, const AddBvnScreen()),
       slideRoute(Routes.addNin, const AddNinScreen()),
       slideRoute(Routes.verifyBvn, const VerifyBvnScreen()),
@@ -138,7 +145,12 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       slideRoute(Routes.addMoney, const AddMoneyScreen()),
       slideRoute(Routes.shareAccount, const ShareAccountScreen()),
       slideRoute(Routes.support, const SupportScreen()),
-      slideRoute(Routes.supportChat, const SupportChatScreen()),
+      GoRoute(
+        path: Routes.supportChat,
+        pageBuilder: (context, state) => buildPageWithTransition(
+          SupportChatScreen(initialMessage: state.extra as String?),
+        ),
+      ),
       GoRoute(
         path: Routes.supportTicket,
         pageBuilder: (context, state) =>

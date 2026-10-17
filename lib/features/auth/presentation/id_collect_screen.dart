@@ -12,12 +12,14 @@ import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/error_messages.dart';
+import '../../../data/api/api_exception.dart';
 import '../../../data/models/auth.dart';
 import '../../../data/repositories/repositories.dart';
 import '../../../shared/widgets/glass_card.dart';
 import '../../../shared/widgets/pressable_scale.dart';
 import '../../../features/pop-ups/transfaBankPrivacy_popup.dart';
 import '../../../features/pop-ups/transfaDone_popup.dart';
+import 'verify_nin_screen.dart';
 
 class IdCollectScreen extends StatefulWidget {
   final WidgetBuilder iconBuilder;
@@ -631,8 +633,9 @@ class AddBvnScreen extends ConsumerWidget {
           );
         } catch (error) {
           if (!context.mounted) return;
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text(userFacingError(error))));
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
         }
       },
     );
@@ -641,11 +644,6 @@ class AddBvnScreen extends ConsumerWidget {
 
 class AddNinScreen extends ConsumerWidget {
   const AddNinScreen({super.key});
-
-  String _formatIdNumber(String number) {
-    if (number.length != 11) return number;
-    return '${number.substring(0, 4)} ${number.substring(4, 8)} ${number.substring(8)}';
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -675,6 +673,17 @@ class AddNinScreen extends ConsumerWidget {
           final result = await ref
               .read(authRepositoryProvider)
               .verifyNin(enteredNumber);
+          if (result['otpRequired'] == true) {
+            if (!context.mounted) return;
+            final verified = await context.push<bool>(
+              Routes.verifyNin,
+              extra: NinOtpArgs(
+                otpReference: result['otpReference'].toString(),
+                maskedPhone: result['maskedPhone']?.toString() ?? 'your number',
+              ),
+            );
+            if (verified != true || !context.mounted) return;
+          }
           ref.invalidate(profileProvider);
           if (!context.mounted) return;
           final profile = ref.read(currentUserProvider);
@@ -688,18 +697,30 @@ class AddNinScreen extends ConsumerWidget {
                   result['profileImageUrl']?.toString() ?? profile?.avatarUrl,
               navigateToReceipt: false,
               onClose: () {
-                if (context.mounted) context.pop();
+                if (context.mounted) context.go(Routes.limits);
               },
             ),
           );
         } catch (error) {
           if (!context.mounted) return;
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text(userFacingError(error))));
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
+          if (_ninSupportRequired(error)) {
+            context.go(
+              Routes.supportChat,
+              extra: 'I need help upgrading my limit to captain tier',
+            );
+          }
         }
       },
     );
   }
+}
+
+bool _ninSupportRequired(Object error) {
+  if (error is! ApiException || error.details is! Map) return false;
+  return (error.details as Map)['supportRequired'] == true;
 }
 
 class _SummaryRow extends StatelessWidget {

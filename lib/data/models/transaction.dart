@@ -48,6 +48,7 @@ class AppTransaction {
   final String? counterpartyAccount;
   final String? bankName;
   final String? memo;
+  final String? counterpartyProfileImageUrl;
   final DateTime createdAt;
 
   const AppTransaction({
@@ -65,6 +66,7 @@ class AppTransaction {
     this.counterpartyAccount,
     this.bankName,
     this.memo,
+    this.counterpartyProfileImageUrl,
   });
 
   factory AppTransaction.fromJson(Map<String, dynamic> json) => AppTransaction(
@@ -93,6 +95,8 @@ class AppTransaction {
             ?.toString(),
     bankName: (json['bank_name'] ?? json['bankName'])?.toString(),
     memo: (json['memo'] ?? json['narration'])?.toString(),
+    counterpartyProfileImageUrl: json['counterpartyProfileImageUrl']
+        ?.toString(),
     createdAt:
         DateTime.tryParse(
           (json['created_at'] ?? json['createdAt'] ?? '').toString(),
@@ -115,6 +119,8 @@ class AppTransaction {
       'counterparty_account': counterpartyAccount,
     if (bankName != null) 'bank_name': bankName,
     if (memo != null) 'memo': memo,
+    if (counterpartyProfileImageUrl != null)
+      'counterpartyProfileImageUrl': counterpartyProfileImageUrl,
     'created_at': createdAt.toUtc().toIso8601String(),
   };
 }

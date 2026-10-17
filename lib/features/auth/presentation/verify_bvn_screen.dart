@@ -30,7 +30,7 @@ class VerifyBvnScreen extends StatelessWidget {
       ),
       title: 'Verify Your BVN',
       subtitle: 'CBN sent a verification code to your\nphone: 4888.',
-      onVerified: () => context.push(Routes.identityVerification),
+      onVerified: (_) async => context.push(Routes.identityVerification),
     );
   }
 }

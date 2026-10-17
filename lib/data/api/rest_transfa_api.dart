@@ -388,6 +388,29 @@ class RestTransfaApi implements TransfaApi {
   }
 
   @override
+  Future<Map<String, dynamic>> confirmNinOtp({
+    required String otpReference,
+    required String otp,
+  }) async {
+    return _dataMap(
+      await _client.post(
+        '$_api/kyc/nin/otp/confirm',
+        data: {'otpReference': otpReference, 'otp': otp},
+      ),
+    );
+  }
+
+  @override
+  Future<Map<String, dynamic>> resendNinOtp(String otpReference) async {
+    return _dataMap(
+      await _client.post(
+        '$_api/kyc/nin/otp/resend',
+        data: {'otpReference': otpReference},
+      ),
+    );
+  }
+
+  @override
   Future<List<Bank>> getNgnBanks() async {
     final data = _data(await _client.get('$_api/transfers/ngn/banks'));
     if (data is! List) {
@@ -739,6 +762,19 @@ class RestTransfaApi implements TransfaApi {
   @override
   Future<void> markAllNotificationsRead() async {
     _data(await _client.patch('$_api/notifications/read-all'));
+  }
+
+  @override
+  Future<int> getUnreadSupportCount() async {
+    final data = _dataMap(
+      await _client.get('$_api/notifications/support/unread-count'),
+    );
+    return (data['count'] as num?)?.toInt() ?? 0;
+  }
+
+  @override
+  Future<void> markAllSupportNotificationsRead() async {
+    _data(await _client.patch('$_api/notifications/support/read-all'));
   }
 
   @override

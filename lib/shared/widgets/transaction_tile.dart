@@ -29,21 +29,7 @@ class TransactionTile extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
         child: Row(
           children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: isCredit
-                    ? AppColors.success.withValues(alpha: 0.12)
-                    : AppColors.surfaceMuted,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(
-                isCredit ? Icons.south_west_rounded : Icons.north_east_rounded,
-                color: isCredit ? AppColors.success : AppColors.textPrimary,
-                size: 20,
-              ),
-            ),
+            _CounterpartyAvatar(tx: tx),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -57,7 +43,7 @@ class TransactionTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '${AppFormat.dateTime(tx.createdAt)}${tx.bankName != null ? ' • ${tx.bankName}' : ''}',
+                    '${tx.memo ?? tx.bankName ?? 'Bank transfer'} • ${AppFormat.dateTime(tx.createdAt)}',
                     style: AppTypography.caption,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -81,6 +67,56 @@ class TransactionTile extends StatelessWidget {
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CounterpartyAvatar extends StatelessWidget {
+  const _CounterpartyAvatar({required this.tx});
+
+  final AppTransaction tx;
+
+  @override
+  Widget build(BuildContext context) {
+    if ((tx.counterpartyProfileImageUrl ?? '').isNotEmpty) {
+      return ClipOval(
+        child: Image.network(
+          tx.counterpartyProfileImageUrl!,
+          width: 44,
+          height: 44,
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => _initials(),
+        ),
+      );
+    }
+    return _initials();
+  }
+
+  Widget _initials() {
+    const colors = [Color(0xFF075E54), Color(0xFFAD1457), Color(0xFF29B6F6)];
+    final words = tx.counterpartyName
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((word) => word.isNotEmpty)
+        .toList();
+    final initials = words.isEmpty
+        ? 'TF'
+        : words.take(2).map((word) => word[0].toUpperCase()).join();
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: colors[tx.counterpartyName.hashCode.abs() % colors.length],
+        shape: BoxShape.circle,
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        initials,
+        style: AppTypography.bodyStrong.copyWith(
+          color: Colors.white,
+          fontWeight: FontWeight.w800,
         ),
       ),
     );

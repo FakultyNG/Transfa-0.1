@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/constants/assets.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../data/repositories/repositories.dart';
@@ -21,6 +20,10 @@ class ShareAccountScreen extends ConsumerWidget {
     final account = dva.maybeWhen(
       data: (d) => d.accountNumber,
       orElse: () => '—',
+    );
+    final bankName = dva.maybeWhen(
+      data: (d) => d.bankName,
+      orElse: () => 'Bank',
     );
 
     return ModalScaffold(
@@ -99,7 +102,7 @@ class ShareAccountScreen extends ConsumerWidget {
               child: Column(
                 children: [
                   Text(
-                    'Account Number',
+                    bankName,
                     style: AppTypography.body.copyWith(
                       color: Colors.white.withValues(alpha: 0.85),
                       fontSize: 18,

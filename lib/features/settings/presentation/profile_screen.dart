@@ -18,7 +18,11 @@ class ProfileScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(profileProvider);
     final kycStatus = ref.watch(kycStatusProvider);
-    final user = profile.asData?.value ?? ref.watch(currentUserProvider);
+    final sessionUser = ref.watch(currentUserProvider);
+    final fetchedProfile = profile.asData?.value;
+    final user = fetchedProfile?.id == sessionUser?.id
+        ? fetchedProfile
+        : sessionUser;
     final firstName = (user?.fullName.trim().isNotEmpty ?? false)
         ? user!.fullName.trim().split(RegExp(r'\s+')).first
         : 'Transfa';

@@ -16,7 +16,9 @@ import 'memo_chat_screen.dart';
 
 /// Original Transfa support chat UI backed by the live support API.
 class SupportChatScreen extends ConsumerStatefulWidget {
-  const SupportChatScreen({super.key});
+  final String? initialMessage;
+
+  const SupportChatScreen({super.key, this.initialMessage});
 
   @override
   ConsumerState<SupportChatScreen> createState() => _SupportChatScreenState();
@@ -35,7 +37,9 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen> {
   @override
   void initState() {
     super.initState();
+    _input.text = widget.initialMessage ?? '';
     _input.addListener(_inputChanged);
+    unawaited(_clearSupportUnread());
     _loadConversation();
     _poller = Timer.periodic(
       const Duration(seconds: 5),
@@ -44,6 +48,16 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen> {
   }
 
   void _inputChanged() => setState(() {});
+
+  Future<void> _clearSupportUnread() async {
+    try {
+      await ref.read(notificationRepositoryProvider).markAllSupportRead();
+      ref.invalidate(unreadSupportCountProvider);
+      ref.invalidate(notificationsProvider);
+    } catch (_) {
+      // Chat remains usable if notification acknowledgement is unavailable.
+    }
+  }
 
   Future<void> _loadConversation({bool silent = false}) async {
     if (!silent && mounted) setState(() => _loading = true);
@@ -64,6 +78,7 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen> {
         _loading = false;
       });
       _scrollToLatest();
+      unawaited(_clearSupportUnread());
     } catch (error) {
       if (!mounted || silent) return;
       setState(() {

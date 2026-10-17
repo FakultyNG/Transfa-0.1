@@ -4,11 +4,15 @@ String? notificationRoute(String? deepLink) {
   final uri = Uri.tryParse(deepLink ?? '');
   if (uri == null) return null;
 
-  return switch ('${uri.host}${uri.path}') {
+  final destination = '${uri.host}${uri.path}';
+  if (destination == 'support' || destination.startsWith('support/')) {
+    return Routes.support;
+  }
+
+  return switch (destination) {
     'wallet' => Routes.walletOverview,
     'transactions' => Routes.transactions,
     'security/activity' => Routes.security,
-    'support' => Routes.support,
     _ => null,
   };
 }

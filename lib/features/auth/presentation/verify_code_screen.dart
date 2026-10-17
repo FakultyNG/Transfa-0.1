@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../shared/widgets/glass_card.dart';
-import '../../../shared/widgets/modal_scaffold.dart';
 
 /// Reusable "Verify Your XXX" code-entry screen used by both NIN (NIMC
 /// logo) and BVN (CBN logo) flows.
@@ -22,7 +21,8 @@ class VerifyCodeScreen extends StatefulWidget {
   final String subtitle;
   final String initialCode;
   final int length;
-  final VoidCallback onVerified;
+  final Future<void> Function(String code) onVerified;
+  final Future<void> Function()? onResend;
 
   const VerifyCodeScreen({
     super.key,
@@ -30,7 +30,8 @@ class VerifyCodeScreen extends StatefulWidget {
     required this.title,
     required this.subtitle,
     required this.onVerified,
-    this.initialCode = '420',
+    this.onResend,
+    this.initialCode = '',
     this.length = 6,
   });
 
@@ -39,9 +40,11 @@ class VerifyCodeScreen extends StatefulWidget {
 }
 
 class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
-  late final TextEditingController _ctrl =
-      TextEditingController(text: widget.initialCode);
+  late final TextEditingController _ctrl = TextEditingController(
+    text: widget.initialCode,
+  );
   final FocusNode _focus = FocusNode();
+  bool _submitting = false;
 
   @override
   void initState() {
@@ -59,11 +62,49 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
 
   void _onChange() {
     setState(() {});
-    if (_ctrl.text.length == widget.length) {
+    if (_ctrl.text.length == widget.length && !_submitting) {
       // Defer briefly so the last digit renders before we navigate.
       Future.delayed(const Duration(milliseconds: 350), () {
-        if (mounted && _ctrl.text.length == widget.length) widget.onVerified();
+        if (mounted && _ctrl.text.length == widget.length) _submit();
       });
+    }
+  }
+
+  Future<void> _submit() async {
+    if (_submitting) return;
+    setState(() => _submitting = true);
+    try {
+      await widget.onVerified(_ctrl.text);
+    } catch (error) {
+      if (!mounted) return;
+      _ctrl.clear();
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  Future<void> _resend() async {
+    if (_submitting || widget.onResend == null) return;
+    setState(() => _submitting = true);
+    try {
+      await widget.onResend!();
+      _ctrl.clear();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('A new verification code was sent.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
     }
   }
 
@@ -81,126 +122,132 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(28, 80, 28, 32),
           child: Stack(
-        children: [
-          SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Column(
-              children: [
-                GlassCard(
-                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 28),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(width: 60, height: 60, child: widget.icon),
-                      const SizedBox(height: 18),
-                      Text(
-                        widget.title,
-                        style: AppTypography.displayMedium.copyWith(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 32,
+            children: [
+              SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Column(
+                  children: [
+                    GlassCard(
+                      padding: const EdgeInsets.fromLTRB(24, 24, 24, 28),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SizedBox(width: 60, height: 60, child: widget.icon),
+                          const SizedBox(height: 18),
+                          Text(
+                            widget.title,
+                            style: AppTypography.displayMedium.copyWith(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 32,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            widget.subtitle,
+                            style: AppTypography.body.copyWith(fontSize: 18),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    GestureDetector(
+                      onTap: _showKeyboard,
+                      behavior: HitTestBehavior.opaque,
+                      child: GlassCard(
+                        padding: const EdgeInsets.fromLTRB(24, 22, 24, 30),
+                        child: Column(
+                          children: [
+                            Text(
+                              'Enter the code here',
+                              style: AppTypography.subheading.copyWith(
+                                fontSize: 20,
+                              ),
+                            ),
+                            const SizedBox(height: 26),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: List.generate(widget.length, (i) {
+                                final char = i < _ctrl.text.length
+                                    ? _ctrl.text[i]
+                                    : null;
+                                return _CodeSlot(char: char);
+                              }),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        widget.subtitle,
-                        style: AppTypography.body.copyWith(fontSize: 18),
+                    ),
+                    const SizedBox(height: 20),
+                    GlassCard(
+                      padding: const EdgeInsets.fromLTRB(22, 22, 22, 22),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Code Delayed?',
+                            style: AppTypography.subheading.copyWith(
+                              fontSize: 20,
+                              color: Colors.black,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          _ActionRow(
+                            icon: Icons.chat_bubble_rounded,
+                            label: 'Send New Code',
+                            onTap: widget.onResend == null ? null : _resend,
+                          ),
+                          const SizedBox(height: 10),
+                          _ActionRow(
+                            icon: Icons.close_rounded,
+                            label: 'Cancel',
+                            onTap: () => context.pop(),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                 ),
-                const SizedBox(height: 20),
-                GestureDetector(
-                  onTap: _showKeyboard,
-                  behavior: HitTestBehavior.opaque,
-                  child: GlassCard(
-                    padding: const EdgeInsets.fromLTRB(24, 22, 24, 30),
-                    child: Column(
-                      children: [
-                        Text(
-                          'Enter the code here',
-                          style:
-                              AppTypography.subheading.copyWith(fontSize: 20),
-                        ),
-                        const SizedBox(height: 26),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: List.generate(widget.length, (i) {
-                            final char = i < _ctrl.text.length
-                                ? _ctrl.text[i]
-                                : null;
-                            return _CodeSlot(char: char);
-                          }),
-                        ),
-                      ],
+              ),
+              // Off-screen numeric TextField — invisible but real, so the
+              // platform soft keyboard opens when it gains focus. The
+              // controller listener mirrors typed digits into the slot row.
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: -100,
+                child: SizedBox(
+                  height: 1,
+                  child: TextField(
+                    controller: _ctrl,
+                    focusNode: _focus,
+                    keyboardType: TextInputType.number,
+                    showCursor: false,
+                    maxLength: widget.length,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(widget.length),
+                    ],
+                    style: const TextStyle(
+                      color: Colors.transparent,
+                      height: 0,
+                    ),
+                    decoration: const InputDecoration(
+                      counterText: '',
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      isCollapsed: true,
+                      contentPadding: EdgeInsets.zero,
                     ),
                   ),
                 ),
-                const SizedBox(height: 20),
-                GlassCard(
-                  padding: const EdgeInsets.fromLTRB(22, 22, 22, 22),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Code Delayed?',
-                        style: AppTypography.subheading.copyWith(
-                          fontSize: 20,
-                          color: Colors.black,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      _ActionRow(
-                        icon: Icons.chat_bubble_rounded,
-                        label: 'Send New Code',
-                        onTap: () => _ctrl.clear(),
-                      ),
-                      const SizedBox(height: 10),
-                      _ActionRow(
-                        icon: Icons.close_rounded,
-                        label: 'Cancel',
-                        onTap: () => context.pop(),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-              ],
-            ),
-          ),
-          // Off-screen numeric TextField — invisible but real, so the
-          // platform soft keyboard opens when it gains focus. The
-          // controller listener mirrors typed digits into the slot row.
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: -100,
-            child: SizedBox(
-              height: 1,
-              child: TextField(
-                controller: _ctrl,
-                focusNode: _focus,
-                keyboardType: TextInputType.number,
-                showCursor: false,
-                maxLength: widget.length,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(widget.length),
-                ],
-                style: const TextStyle(color: Colors.transparent, height: 0),
-                decoration: const InputDecoration(
-                  counterText: '',
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                  isCollapsed: true,
-                  contentPadding: EdgeInsets.zero,
-                ),
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
-    )));
+    );
   }
 }
 
@@ -241,7 +288,7 @@ class _CodeSlot extends StatelessWidget {
 class _ActionRow extends StatelessWidget {
   final IconData icon;
   final String label;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   const _ActionRow({
     required this.icon,
     required this.label,

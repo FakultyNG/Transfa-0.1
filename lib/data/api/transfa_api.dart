@@ -86,6 +86,11 @@ abstract interface class TransfaApi {
   Future<DedicatedVirtualAccount> createDva();
   Future<void> markAddMoneyClicked();
   Future<Map<String, dynamic>> verifyNin(String nin);
+  Future<Map<String, dynamic>> confirmNinOtp({
+    required String otpReference,
+    required String otp,
+  });
+  Future<Map<String, dynamic>> resendNinOtp(String otpReference);
 
   Future<List<Bank>> getNgnBanks();
   Future<ResolvedBankAccount> resolveNgnAccount({
@@ -160,6 +165,8 @@ abstract interface class TransfaApi {
   Future<List<AppNotification>> listNotifications();
   Future<void> markNotificationRead(String id);
   Future<void> markAllNotificationsRead();
+  Future<int> getUnreadSupportCount();
+  Future<void> markAllSupportNotificationsRead();
   Future<void> registerDeviceToken({
     required String deviceId,
     required String fcmToken,

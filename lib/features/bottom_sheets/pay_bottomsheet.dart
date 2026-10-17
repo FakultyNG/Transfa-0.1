@@ -1,13 +1,20 @@
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../../core/constants/assets.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../data/mock_api/currency.dart';
 import '../../../shared/widgets/transfa_logo.dart';
-import '../../features/transfers/presentation/recipient_picker_screen.dart'; // adjust path if needed
+import '../../../data/models/bank.dart';
+import '../../../data/models/transaction.dart';
+import '../../../data/repositories/repositories.dart';
+import '../../../core/utils/error_messages.dart';
+import '../transfers/presentation/transfer_state.dart';
 
 // ============================================================
 // PAY SHEET BOTTOM SHEET
@@ -20,7 +27,7 @@ import '../../features/transfers/presentation/recipient_picker_screen.dart'; // 
 // Summary, Touch to Confirm) is restored as a standalone fallback UI
 // and is untouched by that flow change.
 
-class PaySheet extends StatefulWidget {
+class PaySheet extends ConsumerStatefulWidget {
   final String amount;
   final AmountCurrency currency;
   final String memo;
@@ -35,50 +42,33 @@ class PaySheet extends StatefulWidget {
   });
 
   @override
-  State<PaySheet> createState() => _PaySheetState();
+  ConsumerState<PaySheet> createState() => _PaySheetState();
 }
 
-class _PaySheetState extends State<PaySheet> {
+class _PaySheetState extends ConsumerState<PaySheet> {
   final TextEditingController _memoController = TextEditingController();
+  final TextEditingController _accountController = TextEditingController();
 
   // Selected recipient data - updated from navigation
   String _selectedAccountNumber = '';
   String _selectedBank = '';
-  String _selectedBankLogo = '';
-  Color? _selectedBankGradient1;
-  Color? _selectedBankGradient2;
+  final String _selectedBankLogo = '';
+  final Color? _selectedBankGradient1 = null;
+  final Color? _selectedBankGradient2 = null;
   String _selectedRecipientName = '';
   String? _selectedRecipientImage;
 
-  // Mock data - replace with actual API calls
-  final double _userBalance = 50000000.00;
-  final double _transactionFee = 1000.00;
-
-  // Default recipient data (fallback)
-  final String _defaultRecipientName = 'Magic Payma';
-  final String _defaultAccountNumber = '207 922 3313';
-  final String _defaultBankName = 'OPay';
-  final String? _defaultRecipientImage = Assets.magic;
-
-  // Getters for current values
-  String get _currentRecipientName => _selectedRecipientName.isNotEmpty
-      ? _selectedRecipientName
-      : _defaultRecipientName;
-
-  String get _currentAccountNumber => _selectedAccountNumber.isNotEmpty
-      ? _selectedAccountNumber
-      : _defaultAccountNumber;
-
-  String get _currentBankName =>
-      _selectedBank.isNotEmpty ? _selectedBank : _defaultBankName;
-
-  String get _currentRecipientImage =>
-      _selectedRecipientImage ?? _defaultRecipientImage!;
+  Bank? _selectedBankModel;
+  List<BankSuggestion> _suggestions = const [];
+  TransferQuote? _quote;
+  bool _loading = false;
 
   double get _totalAmount {
     final amount = double.tryParse(widget.amount.replaceAll(',', '')) ?? 0;
-    return amount + _transactionFee;
+    return _quote?.total ?? amount;
   }
+
+  double get _transactionFee => _quote?.fee ?? 0;
 
   @override
   void initState() {
@@ -89,6 +79,7 @@ class _PaySheetState extends State<PaySheet> {
   @override
   void dispose() {
     _memoController.dispose();
+    _accountController.dispose();
     super.dispose();
   }
 
@@ -96,20 +87,132 @@ class _PaySheetState extends State<PaySheet> {
     widget.onMemoChanged(value);
   }
 
-  // Opens the recipient picker. Recipient selection itself now closes
-  // this sheet and opens the next one directly — this method just
-  // hands off the amount/currency/memo the picker needs to carry
-  // forward.
-  void _goToRecipientPicker() {
-    context.push(
-      Routes.recipientPick,
-      extra: RecipientPickerArgs(
-        amount: widget.amount,
-        currency: widget.currency,
-        memo: _memoController.text,
-        onMemoChanged: widget.onMemoChanged,
-      ),
+  Future<void> _accountChanged(String value) async {
+    final account = value.replaceAll(RegExp(r'\D'), '');
+    setState(() {
+      _selectedAccountNumber = account;
+      _selectedRecipientName = '';
+      _quote = null;
+    });
+    if (account.length != 10) {
+      if (_suggestions.isNotEmpty) setState(() => _suggestions = const []);
+      return;
+    }
+    try {
+      final suggestions = await ref
+          .read(transferRepositoryProvider)
+          .suggestBanks(account);
+      if (mounted && _selectedAccountNumber == account) {
+        setState(() => _suggestions = suggestions);
+      }
+    } catch (_) {
+      // The full bank list remains available if provider suggestions fail.
+    }
+  }
+
+  Future<void> _chooseLiveBank() async {
+    try {
+      final banks = await ref.read(ngnBanksProvider.future);
+      if (!mounted) return;
+      final suggestedCodes = _suggestions.map((item) => item.bankCode).toSet();
+      final ordered = [...banks]
+        ..sort((left, right) {
+          final leftSuggested = suggestedCodes.contains(left.code);
+          final rightSuggested = suggestedCodes.contains(right.code);
+          if (leftSuggested == rightSuggested)
+            return left.name.compareTo(right.name);
+          return leftSuggested ? -1 : 1;
+        });
+      final bank = await showModalBottomSheet<Bank>(
+        context: context,
+        backgroundColor: const Color(0xFFFCFCFB),
+        showDragHandle: true,
+        builder: (context) => SafeArea(
+          child: ListView.builder(
+            itemCount: ordered.length,
+            itemBuilder: (context, index) {
+              final item = ordered[index];
+              return ListTile(
+                leading: const Icon(Icons.account_balance_rounded),
+                title: Text(item.name),
+                subtitle: suggestedCodes.contains(item.code)
+                    ? const Text('Recognized for this account number')
+                    : null,
+                onTap: () => Navigator.pop(context, item),
+              );
+            },
+          ),
+        ),
+      );
+      if (bank == null || !mounted) return;
+      setState(() {
+        _selectedBankModel = bank;
+        _selectedBank = bank.name;
+        _quote = null;
+      });
+      if (_selectedAccountNumber.length == 10) await _loadQuote();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
+      }
+    }
+  }
+
+  Future<void> _loadQuote() async {
+    final bank = _selectedBankModel;
+    final amount = double.tryParse(widget.amount.replaceAll(',', '')) ?? 0;
+    if (bank == null || _selectedAccountNumber.length != 10 || amount <= 0)
+      return;
+    setState(() => _loading = true);
+    try {
+      final repository = ref.read(transferRepositoryProvider);
+      final resolved = await repository.resolveAccount(
+        bankCode: bank.code,
+        accountNumber: _selectedAccountNumber,
+      );
+      final quote = await repository.quoteNgn(
+        amount: amount,
+        bankCode: bank.code,
+        accountNumber: _selectedAccountNumber,
+        narration: _memoController.text.trim().isEmpty
+            ? 'TF Transfer'
+            : _memoController.text.trim(),
+      );
+      if (!mounted) return;
+      setState(() {
+        _selectedRecipientName = resolved.accountName;
+        _quote = quote;
+      });
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _confirmTransfer() async {
+    if (_quote == null) await _loadQuote();
+    if (!mounted || _quote == null || _selectedBankModel == null) return;
+    final amount = double.tryParse(widget.amount.replaceAll(',', '')) ?? 0;
+    ref.read(transferDraftProvider.notifier).state = TransferDraft(
+      currency: TxCurrency.ngn,
+      amount: amount,
+      recipientName: _selectedRecipientName,
+      recipientAccount: _selectedAccountNumber,
+      bankName: _selectedBank,
+      bankCode: _selectedBankModel!.code,
+      memo: _memoController.text.trim(),
+      quote: _quote,
     );
+    final router = GoRouter.of(context);
+    Navigator.pop(context);
+    router.push(Routes.transferConfirm);
   }
 
   // Get the appropriate icon for the account number field
@@ -331,64 +434,69 @@ class _PaySheetState extends State<PaySheet> {
                         // the recipient picker, which routes straight
                         // into the next sheet on selection instead of
                         // returning a result here.
-                        GestureDetector(
-                          onTap: _goToRecipientPicker,
-                          child: Container(
-                            height: 62,
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFCFCFB),
-                              borderRadius: BorderRadius.circular(35),
-                            ),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                const Text(
-                                  'To:',
-                                  style: TextStyle(
+                        Container(
+                          height: 62,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFCFCFB),
+                            borderRadius: BorderRadius.circular(35),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              const Text(
+                                'To:',
+                                style: TextStyle(
+                                  fontFamily: 'Roboto',
+                                  fontWeight: FontWeight.w400,
+                                  fontSize: 17,
+                                  letterSpacing: 0.02,
+                                  color: Color(0xFF8A8A8C),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: TextField(
+                                  controller: _accountController,
+                                  keyboardType: TextInputType.number,
+                                  maxLength: 10,
+                                  onChanged: _accountChanged,
+                                  style: const TextStyle(
                                     fontFamily: 'Roboto',
                                     fontWeight: FontWeight.w400,
                                     fontSize: 17,
                                     letterSpacing: 0.02,
-                                    color: Color(0xFF8A8A8C),
+                                    color: Colors.black,
+                                  ),
+                                  decoration: InputDecoration(
+                                    counterText: '',
+                                    hintText: 'Account number...',
+                                    helperText: _selectedRecipientName.isEmpty
+                                        ? null
+                                        : _selectedRecipientName,
+                                    border: InputBorder.none,
+                                    isDense: true,
                                   ),
                                 ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    _selectedAccountNumber.isEmpty
-                                        ? 'Account number...'
-                                        : _selectedAccountNumber,
-                                    style: TextStyle(
-                                      fontFamily: 'Roboto',
-                                      fontWeight: FontWeight.w400,
-                                      fontSize: 17,
-                                      letterSpacing: 0.02,
-                                      color: _selectedAccountNumber.isEmpty
-                                          ? const Color(0xFF8A8A8C)
-                                          : Colors.black,
-                                    ),
+                              ),
+                              Container(
+                                width: 30,
+                                height: 30,
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      Color(0xFF07B826),
+                                      Color(0xFF4EE659),
+                                    ],
                                   ),
+                                  borderRadius: BorderRadius.circular(35),
                                 ),
-                                Container(
-                                  width: 30,
-                                  height: 30,
-                                  decoration: BoxDecoration(
-                                    gradient: const LinearGradient(
-                                      begin: Alignment.topCenter,
-                                      end: Alignment.bottomCenter,
-                                      colors: [
-                                        Color(0xFF07B826),
-                                        Color(0xFF4EE659),
-                                      ],
-                                    ),
-                                    borderRadius: BorderRadius.circular(35),
-                                  ),
-                                  alignment: Alignment.center,
-                                  child: _getAccountIcon(),
-                                ),
-                              ],
-                            ),
+                                alignment: Alignment.center,
+                                child: _getAccountIcon(),
+                              ),
+                            ],
                           ),
                         ),
                         const SizedBox(height: 20),
@@ -398,20 +506,7 @@ class _PaySheetState extends State<PaySheet> {
                         // bank choice for the active flow now happens
                         // inside SingleAccountSheet instead.
                         GestureDetector(
-                          onTap: () async {
-                            final result = await context
-                                .push<Map<String, dynamic>>(Routes.chooseBank);
-                            if (result != null && mounted) {
-                              setState(() {
-                                _selectedBank = result['name'] ?? '';
-                                _selectedBankLogo = result['logo'] ?? '';
-                                _selectedBankGradient1 =
-                                    result['gradientColor1'];
-                                _selectedBankGradient2 =
-                                    result['gradientColor2'];
-                              });
-                            }
-                          },
+                          onTap: _chooseLiveBank,
                           child: Container(
                             height: 62,
                             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -610,7 +705,7 @@ class _PaySheetState extends State<PaySheet> {
                                     children: [
                                       TextSpan(
                                         text:
-                                            '${widget.currency.symbol}${_userBalance.toStringAsFixed(0)}',
+                                            '${widget.currency.symbol}${(ref.watch(walletProvider).valueOrNull?.ngnBalance ?? 0).toStringAsFixed(0)}',
                                         style: AppTypography.body.copyWith(
                                           color: Colors.grey,
                                           fontSize: 17,
@@ -709,7 +804,7 @@ class _PaySheetState extends State<PaySheet> {
 
                         // Pay Bubble - Touch to Confirm
                         GestureDetector(
-                          onTap: _goToRecipientPicker,
+                          onTap: _loading ? null : _confirmTransfer,
                           child: Container(
                             width: double.infinity,
                             height: 150,

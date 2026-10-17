@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -17,6 +15,7 @@ import '../../../shared/widgets/transfa_modal_header.dart';
 import 'transfer_state.dart';
 import '../../../data/mock_api/currency.dart';
 import '../../../shared/widgets/homeFab.dart';
+import '../../bottom_sheets/pay_bottomsheet.dart';
 
 enum TransfaAiView { today, keypad }
 
@@ -87,13 +86,20 @@ class _TransfaAiScreenState extends ConsumerState<TransfaAiScreen> {
     if (next != null && mounted) setState(() => _currency = next);
   }
 
-  void _sendNGN() {
+  Future<void> _sendNGN() async {
     final value = double.tryParse(_digits) ?? 0;
     if (value <= 0) return;
-    ref.read(transferDraftProvider.notifier).state = ref
-        .read(transferDraftProvider)
-        .copyWith(currency: TxCurrency.ngn, amount: value, memo: _memo);
-    context.push(Routes.transferDetails);
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => PaySheet(
+        amount: _formatted,
+        currency: AmountCurrency.ngn,
+        memo: _memo,
+        onMemoChanged: (value) => _memo = value,
+      ),
+    );
   }
 
   void _sendUSD() {
@@ -263,7 +269,7 @@ class _TodayView extends StatelessWidget {
       transactionId: transaction.id,
       avatar: _AvatarKind.card,
       name: transaction.counterpartyName,
-      meta: transaction.bankName ?? transaction.memo ?? 'Transfa',
+      meta: transaction.memo ?? transaction.bankName ?? 'Bank transfer',
       direction: transaction.type == TxType.credit ? _Dir.received : _Dir.sent,
       whenText: _relativeTime(transaction.createdAt),
       status: transaction.status == TxStatus.failed
@@ -272,6 +278,7 @@ class _TodayView extends StatelessWidget {
           ? _Status.processing
           : null,
       amount: amount,
+      profileImageUrl: transaction.counterpartyProfileImageUrl,
     );
   }
 
@@ -389,12 +396,14 @@ class _Tx {
   final String? whenText;
   final _Status? status;
   final String amount;
+  final String? profileImageUrl;
   const _Tx({
     this.transactionId,
     required this.avatar,
     required this.name,
     required this.meta,
     required this.amount,
+    this.profileImageUrl,
     this.direction,
     this.whenText,
     this.status,
@@ -581,6 +590,17 @@ class _Avatar extends StatelessWidget {
   const _Avatar({required this.tx});
   @override
   Widget build(BuildContext context) {
+    if ((tx.profileImageUrl ?? '').isNotEmpty) {
+      return ClipOval(
+        child: Image.network(
+          tx.profileImageUrl!,
+          width: 52,
+          height: 52,
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => _InitialsAvatar(tx: tx),
+        ),
+      );
+    }
     switch (tx.avatar) {
       case _AvatarKind.spotify:
         return Container(
@@ -592,7 +612,7 @@ class _Avatar extends StatelessWidget {
           child: SvgPicture.asset(Assets.spotifyIcon, fit: BoxFit.contain),
         );
       case _AvatarKind.card:
-        return const _CardAvatar();
+        return _InitialsAvatar(tx: tx);
       case _AvatarKind.connectic:
         return Container(
           decoration: const BoxDecoration(
@@ -613,38 +633,36 @@ class _Avatar extends StatelessWidget {
   }
 }
 
-class _CardAvatar extends StatelessWidget {
-  const _CardAvatar();
-  @override
-  Widget build(BuildContext context) => Stack(
-    alignment: Alignment.center,
-    children: [
-      Transform.rotate(
-        angle: -0.45,
-        child: const _CardEllipse(color: Color(0xFFFF9F0A)),
-      ),
-      Transform.rotate(
-        angle: 0.45,
-        child: const _CardEllipse(color: Color(0xFF34C759)),
-      ),
-      const _CardEllipse(color: Color(0xFF1EA7FF)),
-    ],
-  );
-}
+class _InitialsAvatar extends StatelessWidget {
+  const _InitialsAvatar({required this.tx});
 
-class _CardEllipse extends StatelessWidget {
-  final Color color;
-  const _CardEllipse({required this.color});
+  final _Tx tx;
+
   @override
-  Widget build(BuildContext context) => Container(
-    width: 28,
-    height: 36,
-    decoration: BoxDecoration(
-      color: color.withValues(alpha: 0.75),
-      borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: Colors.white, width: 1.4),
-    ),
-  );
+  Widget build(BuildContext context) {
+    const colors = [Color(0xFF075E54), Color(0xFFAD1457), Color(0xFF29B6F6)];
+    final words = tx.name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((word) => word.isNotEmpty)
+        .toList();
+    final initials = words.isEmpty
+        ? 'TF'
+        : words.take(2).map((word) => word[0].toUpperCase()).join();
+    final color = colors[tx.name.hashCode.abs() % colors.length];
+    return Container(
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+      alignment: Alignment.center,
+      child: Text(
+        initials,
+        style: AppTypography.bodyStrong.copyWith(
+          color: Colors.white,
+          fontSize: 16,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
 }
 
 class _KeypadView extends StatelessWidget {
