@@ -24,10 +24,12 @@ session and sends the first OTP in one request. Its data includes
 must not call `/auth/otp/send` immediately afterward. `/auth/otp/resend` remains
 the explicit retry route after the initial challenge.
 
-Registration must stop and display the backend message when either uniqueness
-conflict is returned: `PHONE_NUMBER_ALREADY_REGISTERED` from registration start
-or `BVN_ALREADY_REGISTERED` from BVN verification/completion. The app must not
-continue to OTP or the next KYC screen after either HTTP 409 response.
+When registration start returns `PHONE_NUMBER_ALREADY_REGISTERED` (or the
+legacy `USER_ALREADY_EXISTS`), treat the number as a returning customer: skip
+OTP and open `/unlock/passcode` with that phone number. A correct passcode uses
+the normal login endpoint and opens Home; an incorrect passcode stays on the
+passcode screen. `BVN_ALREADY_REGISTERED` remains a blocking KYC conflict and
+must not advance to the next onboarding screen.
 
 ## Startup, Unlock, And Recovery
 

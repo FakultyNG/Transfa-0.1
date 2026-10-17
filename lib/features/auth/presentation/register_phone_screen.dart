@@ -7,11 +7,13 @@ import 'package:go_router/go_router.dart';
 
 import 'package:transfa/shared/widgets/animated_dotted_loader.dart';
 import 'package:transfa/shared/widgets/pressable_scale.dart';
+
 import '../../../core/constants/assets.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/error_messages.dart';
+import '../../../data/api/api_exception.dart';
 import '../../../data/models/auth.dart';
 import '../../../data/repositories/repositories.dart';
 import '../../../features/auth/presentation/unlock_screens.dart';
@@ -63,9 +65,15 @@ class _RegisterPhoneScreenState extends ConsumerState<RegisterPhoneScreen> {
       if (mounted) context.push(Routes.verifyStartkey);
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
+      if (error is ApiException &&
+          (error.code == 'PHONE_NUMBER_ALREADY_REGISTERED' ||
+              error.code == 'USER_ALREADY_EXISTS')) {
+        ref.read(registrationSessionProvider.notifier).state = null;
+        context.push(Routes.unlockPasscode, extra: enteredNumber);
+        return;
+      }
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(userFacingError(error))));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -178,8 +186,7 @@ class _RegisterPhoneScreenState extends ConsumerState<RegisterPhoneScreen> {
                         ),
                         children: [
                           const TextSpan(
-                            text:
-                                'As you continue, your activity and interactions help improve the service. When you pay & receive money, we also use your history to tailor your experience.\n',
+                            text: 'As you continue, your activity and interactions help improve the service. When you pay & receive money, we also use your history to tailor your experience.\n',
                           ),
                           TextSpan(
                             text: 'See how your info is managed…',
