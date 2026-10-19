@@ -1,17 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:flutter_contacts/flutter_contacts.dart' as device_contacts;
 import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/assets.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../data/mock_api/currency.dart';
+import '../../../data/models/bank.dart';
+import '../../../data/repositories/repositories.dart';
+import '../../../core/utils/error_messages.dart';
 import '../../../shared/widgets/glass_card.dart';
 import '../../../shared/widgets/transfa_logo.dart';
-import '../../bottom_sheets/singleAccountSheet.dart';
-import '../../bottom_sheets/multipleAccountsSheet.dart';
-import 'transfer_state.dart';
 
 enum _PickerMode { search, recents, contacts }
 
@@ -32,6 +33,22 @@ class RecipientPickerArgs {
   });
 }
 
+class RecipientPickerResult {
+  const RecipientPickerResult({
+    required this.name,
+    required this.accountNumber,
+    required this.bankName,
+    required this.bankCode,
+    this.imageUrl,
+  });
+
+  final String name;
+  final String accountNumber;
+  final String bankName;
+  final String bankCode;
+  final String? imageUrl;
+}
+
 /// "New Transfa" recipient picker. Three modes selected by the bottom
 /// segmented control: search results, Recents tab, Contacts tab.
 ///
@@ -40,8 +57,8 @@ class RecipientPickerArgs {
 /// then opens SingleAccountSheet or MultipleAccountsSheet directly —
 /// so the user goes straight from "who" to "confirm the details."
 class RecipientPickerScreen extends ConsumerStatefulWidget {
-  final RecipientPickerArgs args;
-  const RecipientPickerScreen({super.key, required this.args});
+  final RecipientPickerArgs? args;
+  const RecipientPickerScreen({super.key, this.args});
 
   @override
   ConsumerState<RecipientPickerScreen> createState() =>
@@ -52,184 +69,113 @@ class _RecipientPickerScreenState extends ConsumerState<RecipientPickerScreen> {
   _PickerMode _mode = _PickerMode.recents;
   final _search = TextEditingController();
   String? _selectedContactName;
+  List<_Contact> _recents = const [];
+  List<_Contact> _contacts = const [];
+  bool _loadingRecents = true;
+  bool _loadingContacts = false;
+  String? _error;
 
-  static final Map<String, String> _accountNumbers = {
-    'Amadioha Obi': '123 456 7890',
-    'Dalia Wetzel': '234 567 8901',
-    'Magic Payma': '207 922 3313',
-    'Hugo Menendez': '345 678 9012',
-    'Saraphina Gonzalez': '456 789 0123',
-    'Sarah Bon': '567 890 1234',
-    'Janelle Hickleson': '678 901 2345',
-    'John Caled': '789 012 3456',
-    'Tobias Walsh': '890 123 4567',
-    'Maya Carter': '901 234 5678',
-  };
-
-  // Mock bank list used when a recipient has multiple accounts on file.
-  static const List<BankAccount> _mockBanks = [
-    BankAccount(
-      name: 'Transfa',
-      logoAsset: Assets.logoSmallWhite,
-      gradientColor1: Color(0xFF000000),
-      gradientColor2: Color(0xFF000000),
-    ),
-    BankAccount(
-      name: 'FCMB',
-      logoAsset: Assets.bankfcmbRound,
-      gradientColor1: Color(0xFF5C2684),
-      gradientColor2: Color(0xFF5C2684),
-    ),
-    BankAccount(
-      name: 'OPay',
-      logoAsset: Assets.bankOpay,
-      gradientColor1: Color(0xFFFFFFFF),
-      gradientColor2: Color(0xFFFFFFFF),
-    ),
-  ];
-
-  // Mock flag — every recipient resolves to the multi-bank flow here,
-  // matching the previous PaySheet behavior. Swap in real account-count
-  // data when it's available.
-  static const bool _mockHasMultipleBanks = true;
-
-  static final _contacts = [
-    _Contact('Amadioha Obi', null, color: Color(0xFFFF375F), red: true),
-    _Contact('Dalia Wetzel', Assets.avatarGrace),
-    _Contact('Magic Payma', Assets.magic),
-    _Contact('Hugo Menendez', null, color: Color(0xFFD9D9D9)),
-    _Contact('Saraphina Gonzalez', null, color: Color(0xFFC9826B)),
-  ];
-
-  static final _contactsMore = [
-    _Contact('Sarah Bon', Assets.avatarSarah),
-    _Contact('Janelle Hickleson', Assets.avatarJanelle),
-    _Contact('John Caled', null, color: Color(0xFF34C759)),
-    _Contact('Tobias Walsh', null, color: Color(0xFF6238FB)),
-    _Contact('Maya Carter', null, color: Color(0xFFFF9F0A)),
-  ];
-
-  static final _recents = [
-    _Contact('Magic Payma', Assets.magic, subtitle: 'Yesterday', sentUp: true),
-    _Contact(
-      'Spotify',
-      null,
-      color: Color(0xFF1ED760),
-      subtitle: '12 minutes ago',
-      sentUp: true,
-      spotify: true,
-    ),
-    _Contact(
-      'Dalia Wetzel',
-      Assets.avatarGrace,
-      subtitle: 'Thursday',
-      sentUp: false,
-    ),
-    _Contact(
-      'Amadioha Obi',
-      null,
-      color: Color(0xFFFF375F),
-      red: true,
-      subtitle: '2 days ago',
-      sentUp: false,
-    ),
-    _Contact(
-      'Sarah Bon',
-      Assets.avatarSarah,
-      subtitle: '5 days ago',
-      sentUp: true,
-    ),
-  ];
-
-  static final _recentsOlder = [
-    _Contact(
-      'Janelle Hickleson',
-      Assets.avatarJanelle,
-      subtitle: '1 week ago',
-      sentUp: false,
-    ),
-    _Contact(
-      'Hugo Menendez',
-      null,
-      color: Color(0xFF6238FB),
-      subtitle: '2 weeks ago',
-      sentUp: true,
-    ),
-    _Contact(
-      'Saraphina Gonzalez',
-      null,
-      color: Color(0xFFC9826B),
-      subtitle: '3 weeks ago',
-      sentUp: true,
-    ),
-    _Contact(
-      'Amadioha Obi',
-      null,
-      color: Color(0xFFFF375F),
-      red: true,
-      subtitle: '1 month ago',
-      sentUp: false,
-    ),
-    _Contact(
-      'Magic Payma',
-      Assets.magic,
-      subtitle: '2 months ago',
-      sentUp: true,
-    ),
-  ];
-
-  void _pick(_Contact c) {
-    final accountNumber = _accountNumbers[c.name] ?? '000 000 0000';
-    final recipientImage = c.asset ?? Assets.magic;
-
-    ref.read(transferDraftProvider.notifier).state = ref
-        .read(transferDraftProvider)
-        .copyWith(recipientName: c.name);
-
-    // Capture the Navigator before popping — its own context stays
-    // valid even after the routes stacked on it are removed, so we
-    // can safely use it to open the next sheet right after.
-    final navigator = Navigator.of(context);
-    navigator.pop(); // close the recipient picker
-    navigator.pop(); // close the PaySheet bottom sheet underneath it
-    if (!navigator.mounted) return;
-
-    final args = widget.args;
-
-    showModalBottomSheet(
-      context: navigator.context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(45),
-          topRight: Radius.circular(45),
-        ),
-      ),
-      builder: (_) => _mockHasMultipleBanks
-          ? MultipleAccountsSheet(
-              recipientName: c.name,
-              currency: args.currency,
-              amount: args.amount,
-              memo: args.memo,
-              recipientImageUrl: recipientImage,
-              accountNumber: accountNumber,
-              banks: _mockBanks,
-              onMemoChanged: args.onMemoChanged,
-            )
-          : SingleAccountSheet(
-              recipientName: c.name,
-              currencySymbol: args.currency.symbol,
-              amount: args.amount,
-              memo: args.memo,
-              accountNumber: accountNumber,
-              bankName: 'OPay',
-              bankLogoAsset: Assets.bankOpay,
-              recipientImageUrl: recipientImage,
-              onMemoChanged: args.onMemoChanged,
-            ),
-    );
+  @override
+  void initState() {
+    super.initState();
+    _search.addListener(() => setState(() {}));
+    _loadRecents();
   }
+
+  Future<void> _loadRecents() async {
+    try {
+      final items = await ref
+          .read(transferRepositoryProvider)
+          .beneficiaries('ngn_transfer');
+      if (!mounted) return;
+      setState(() {
+        _recents = items
+            .where(
+              (item) =>
+                  item.bankCode != null && item.accountNumber.length == 10,
+            )
+            .map(_Contact.fromBeneficiary)
+            .toList();
+        _error = null;
+      });
+    } catch (error) {
+      if (mounted) setState(() => _error = userFacingError(error));
+    } finally {
+      if (mounted) setState(() => _loadingRecents = false);
+    }
+  }
+
+  Future<void> _loadContacts() async {
+    if (_loadingContacts || _contacts.isNotEmpty) return;
+    setState(() {
+      _loadingContacts = true;
+      _error = null;
+    });
+    try {
+      final permission = await device_contacts.FlutterContacts.permissions
+          .request(device_contacts.PermissionType.read);
+      if (permission != device_contacts.PermissionStatus.granted &&
+          permission != device_contacts.PermissionStatus.limited) {
+        throw Exception(
+          'Contact access is required to find Transfa users on this phone.',
+        );
+      }
+      final deviceItems = await device_contacts.FlutterContacts.getAll(
+        properties: {device_contacts.ContactProperty.phone},
+      );
+      final namesByPhone = <String, String>{};
+      for (final contact in deviceItems) {
+        for (final phone in contact.phones) {
+          final key = _phoneKey(phone.number);
+          if (key.isNotEmpty &&
+              (contact.displayName?.trim().isNotEmpty ?? false)) {
+            namesByPhone[key] = contact.displayName!.trim();
+          }
+        }
+      }
+      final matched = namesByPhone.isEmpty
+          ? const <TransfaContact>[]
+          : await ref
+                .read(transferRepositoryProvider)
+                .matchContacts(namesByPhone.keys.toList());
+      if (!mounted) return;
+      setState(() {
+        _contacts = matched
+            .map(
+              (item) => _Contact.fromTransfaContact(
+                item,
+                deviceName: namesByPhone[_phoneKey(item.phoneNumber)],
+              ),
+            )
+            .toList();
+      });
+    } catch (error) {
+      if (mounted) setState(() => _error = userFacingError(error));
+    } finally {
+      if (mounted) setState(() => _loadingContacts = false);
+    }
+  }
+
+  String _phoneKey(String value) {
+    final digits = value.replaceAll(RegExp(r'\D'), '');
+    if (digits.startsWith('0') && digits.length == 11) {
+      return '234${digits.substring(1)}';
+    }
+    if (digits.startsWith('2340')) {
+      return '234${digits.substring(4)}';
+    }
+    return digits;
+  }
+
+  void _pick(_Contact contact) => context.pop(
+    RecipientPickerResult(
+      name: contact.name,
+      accountNumber: contact.accountNumber,
+      bankName: contact.bankName,
+      bankCode: contact.bankCode,
+      imageUrl: contact.imageUrl,
+    ),
+  );
 
   void _selectContact(String name) {
     setState(() {
@@ -263,15 +209,21 @@ class _RecipientPickerScreenState extends ConsumerState<RecipientPickerScreen> {
                   ..._sectionView(
                     icon: const _RecentsCircle(),
                     label: 'Recents',
-                    items: _recents,
-                    extraItems: _recentsOlder,
+                    items: _recents.take(5).toList(),
+                    extraItems: _recents.length > 5
+                        ? _recents.skip(5).toList()
+                        : null,
+                    loading: _loadingRecents,
                   ),
                 if (_mode == _PickerMode.contacts)
                   ..._sectionView(
                     icon: const _ContactsCircle(),
                     label: 'Contacts',
-                    items: _contacts,
-                    extraItems: _contactsMore,
+                    items: _contacts.take(5).toList(),
+                    extraItems: _contacts.length > 5
+                        ? _contacts.skip(5).toList()
+                        : null,
+                    loading: _loadingContacts,
                   ),
               ],
             ),
@@ -282,7 +234,12 @@ class _RecipientPickerScreenState extends ConsumerState<RecipientPickerScreen> {
               child: _BottomBar(
                 mode: _mode,
                 search: _search,
-                onModeChanged: (m) => setState(() => _mode = m),
+                onModeChanged: (m) {
+                  setState(() => _mode = m);
+                  if (m == _PickerMode.contacts || m == _PickerMode.search) {
+                    _loadContacts();
+                  }
+                },
                 onClose: () => context.pop(),
               ),
             ),
@@ -297,6 +254,7 @@ class _RecipientPickerScreenState extends ConsumerState<RecipientPickerScreen> {
     required String label,
     required List<_Contact> items,
     List<_Contact>? extraItems,
+    bool loading = false,
   }) {
     return [
       Row(
@@ -313,20 +271,32 @@ class _RecipientPickerScreenState extends ConsumerState<RecipientPickerScreen> {
         ],
       ),
       const SizedBox(height: 14),
-      _ListCard(
-        children: items
-            .map(
-              (c) => _ContactRow(
-                contact: c,
-                isSelected: _selectedContactName == c.name,
-                onTap: () {
-                  _selectContact(c.name);
-                  _pick(c);
-                },
-              ),
-            )
-            .toList(),
-      ),
+      if (loading) const Center(child: CircularProgressIndicator()),
+      if (!loading && _error != null)
+        Padding(
+          padding: const EdgeInsets.all(20),
+          child: Text(_error!, textAlign: TextAlign.center),
+        ),
+      if (!loading && _error == null && items.isEmpty)
+        const Padding(
+          padding: EdgeInsets.all(20),
+          child: Text('No Transfa recipients found yet.'),
+        ),
+      if (items.isNotEmpty)
+        _ListCard(
+          children: items
+              .map(
+                (c) => _ContactRow(
+                  contact: c,
+                  isSelected: _selectedContactName == c.name,
+                  onTap: () {
+                    _selectContact(c.name);
+                    _pick(c);
+                  },
+                ),
+              )
+              .toList(),
+        ),
       if (extraItems != null) ...[
         const SizedBox(height: 18),
         _ListCard(
@@ -348,14 +318,19 @@ class _RecipientPickerScreenState extends ConsumerState<RecipientPickerScreen> {
   }
 
   List<Widget> _searchView() {
-    final top = [
-      _Contact('Amadioha Obi', null, color: Color(0xFFFF375F), red: true),
-    ];
-    final others = [
-      _Contact('Magic Payma', Assets.magic),
-      _Contact('Sarah Bon', Assets.avatarSarah),
-      _Contact('Dalia Wetzel', Assets.avatarGrace),
-    ];
+    final query = _search.text.trim().toLowerCase();
+    final all = <_Contact>[..._contacts, ..._recents];
+    final seen = <String>{};
+    final matches = all.where((item) {
+      final unique = '${item.accountNumber}:${item.bankCode}';
+      return seen.add(unique) &&
+          (query.isEmpty ||
+              '${item.name} ${item.accountNumber} ${item.bankName}'
+                  .toLowerCase()
+                  .contains(query));
+    }).toList();
+    final top = matches.take(1).toList();
+    final others = matches.skip(1).toList();
     return [
       Text(
         'Top Result',
@@ -365,21 +340,22 @@ class _RecipientPickerScreenState extends ConsumerState<RecipientPickerScreen> {
         ),
       ),
       const SizedBox(height: 12),
-      _ListCard(
-        children: top
-            .map(
-              (c) => _ContactRow(
-                contact: c,
-                isSelected: _selectedContactName == c.name,
-                onTap: () {
-                  _selectContact(c.name);
-                  _pick(c);
-                },
-              ),
-            )
-            .toList(),
-      ),
-      const SizedBox(height: 28),
+      if (top.isNotEmpty)
+        _ListCard(
+          children: top
+              .map(
+                (c) => _ContactRow(
+                  contact: c,
+                  isSelected: _selectedContactName == c.name,
+                  onTap: () {
+                    _selectContact(c.name);
+                    _pick(c);
+                  },
+                ),
+              )
+              .toList(),
+        ),
+      if (top.isNotEmpty) const SizedBox(height: 28),
       Text(
         'Others',
         style: AppTypography.displayMedium.copyWith(
@@ -388,41 +364,81 @@ class _RecipientPickerScreenState extends ConsumerState<RecipientPickerScreen> {
         ),
       ),
       const SizedBox(height: 12),
-      _ListCard(
-        children: others
-            .map(
-              (c) => _ContactRow(
-                contact: c,
-                isSelected: _selectedContactName == c.name,
-                onTap: () {
-                  _selectContact(c.name);
-                  _pick(c);
-                },
-              ),
-            )
-            .toList(),
-      ),
+      if (others.isNotEmpty)
+        _ListCard(
+          children: others
+              .map(
+                (c) => _ContactRow(
+                  contact: c,
+                  isSelected: _selectedContactName == c.name,
+                  onTap: () {
+                    _selectContact(c.name);
+                    _pick(c);
+                  },
+                ),
+              )
+              .toList(),
+        ),
     ];
   }
 }
 
 class _Contact {
   final String name;
-  final String? asset;
-  final Color? color;
-  final bool red;
-  final bool spotify;
+  final String? imageUrl;
+  final String accountNumber;
+  final String bankName;
+  final String bankCode;
   final String? subtitle;
-  final bool sentUp;
-  const _Contact(
-    this.name,
-    this.asset, {
-    this.color,
-    this.red = false,
-    this.spotify = false,
+  const _Contact({
+    required this.name,
+    required this.accountNumber,
+    required this.bankName,
+    required this.bankCode,
+    this.imageUrl,
     this.subtitle,
-    this.sentUp = true,
   });
+
+  factory _Contact.fromBeneficiary(Beneficiary item) => _Contact(
+    name: item.displayName,
+    accountNumber: item.accountNumber,
+    bankName: item.bankName,
+    bankCode: item.bankCode!,
+    subtitle: _relativeTime(item.lastUsedAt),
+  );
+
+  factory _Contact.fromTransfaContact(
+    TransfaContact item, {
+    String? deviceName,
+  }) => _Contact(
+    name: (deviceName?.trim().isNotEmpty ?? false)
+        ? deviceName!.trim()
+        : item.displayName,
+    imageUrl: item.profileImageUrl,
+    accountNumber: item.accountNumber,
+    bankName: item.bankName,
+    bankCode: item.bankCode,
+  );
+
+  static String _relativeTime(DateTime? value) {
+    if (value == null) {
+      return 'Recently';
+    }
+    final difference = DateTime.now().difference(value.toLocal());
+    if (difference.inMinutes < 60) {
+      return '${difference.inMinutes.clamp(1, 59)} minutes ago';
+    }
+    if (difference.inHours < 24) {
+      return '${difference.inHours} hours ago';
+    }
+    if (difference.inDays == 1) {
+      return 'Yesterday';
+    }
+    if (difference.inDays < 7) {
+      return '${difference.inDays} days ago';
+    }
+    return '${(difference.inDays / 7).floor()} weeks ago';
+  }
 }
 
 class _HeaderCard extends StatelessWidget {
@@ -536,9 +552,7 @@ class _ContactRow extends StatelessWidget {
                     Row(
                       children: [
                         Icon(
-                          contact.sentUp
-                              ? Icons.arrow_upward_rounded
-                              : Icons.arrow_downward_rounded,
+                          Icons.arrow_upward_rounded,
                           size: 14,
                           color: AppColors.textMuted,
                         ),
@@ -562,30 +576,37 @@ class _ContactRow extends StatelessWidget {
   }
 
   Widget _avatar() {
-    if (contact.spotify) {
-      return Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFF1ED760),
-          shape: BoxShape.circle,
-        ),
-        padding: const EdgeInsets.all(8),
-        child: SvgPicture.asset(
-          'assets/icons/logos_spotify-icon.svg',
-          fit: BoxFit.contain,
+    if (contact.imageUrl != null && contact.imageUrl!.isNotEmpty) {
+      return ClipOval(
+        child: Image.network(
+          contact.imageUrl!,
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => _fallbackAvatar(),
         ),
       );
     }
-    if (contact.asset != null) {
-      return ClipOval(child: Image.asset(contact.asset!, fit: BoxFit.cover));
-    }
+    return _fallbackAvatar();
+  }
+
+  Widget _fallbackAvatar() {
     return Container(
       decoration: BoxDecoration(
-        color: contact.color ?? const Color(0xFFD9D9D9),
+        color: _avatarColor(contact.name),
         shape: BoxShape.circle,
       ),
       alignment: Alignment.center,
       child: const Icon(Icons.person_rounded, color: Colors.white, size: 28),
     );
+  }
+
+  Color _avatarColor(String name) {
+    const colors = [
+      Color(0xFFFF375F),
+      Color(0xFF34C759),
+      Color(0xFF6238FB),
+      Color(0xFFC9826B),
+    ];
+    return colors[name.hashCode.abs() % colors.length];
   }
 }
 

@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../data/models/user.dart';
 import '../../../data/repositories/repositories.dart';
-import '../../../shared/widgets/glass_card.dart';
 import '../../../shared/widgets/modal_scaffold.dart';
 import '../../../shared/widgets/transfa_logo.dart';
 
@@ -28,8 +28,49 @@ class ShareAccountScreen extends ConsumerWidget {
 
     return ModalScaffold(
       horizontalPadding: 28,
-      child: GlassCard(
-        padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+      child: AccountShareCard(
+        user: user,
+        bankName: bankName,
+        accountNumber: account,
+      ),
+    );
+  }
+}
+
+/// The original account-details card. This same widget is rendered into the
+/// PNG shared from the wallet popup, keeping the preview and exported image
+/// identical.
+class AccountShareCard extends StatelessWidget {
+  const AccountShareCard({
+    super.key,
+    required this.user,
+    required this.bankName,
+    required this.accountNumber,
+  });
+
+  final AppUser? user;
+  final String bankName;
+  final String accountNumber;
+
+  String get _formattedAccountNumber {
+    final digits = accountNumber.replaceAll(RegExp(r'\s+'), '');
+    if (digits.length != 10) return accountNumber;
+    return '${digits.substring(0, 3)} ${digits.substring(3, 6)} '
+        '${digits.substring(6)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final avatarUrl = user?.avatarUrl;
+    return Container(
+      width: 340,
+      padding: const EdgeInsets.fromLTRB(28, 28, 28, 30),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(52),
+      ),
+      child: Material(
+        color: Colors.transparent,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -51,42 +92,55 @@ class ShareAccountScreen extends ConsumerWidget {
                 Text(
                   'Transfa',
                   style: AppTypography.heading.copyWith(
+                    color: const Color(0xFF111111),
                     fontSize: 26,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 48),
             Center(
-              child: CircleAvatar(
-                radius: 78,
-                backgroundImage:
-                    user?.avatarUrl == null || user!.avatarUrl!.isEmpty
-                    ? null
-                    : NetworkImage(user.avatarUrl!),
-                backgroundColor: Colors.grey,
-                child: user?.avatarUrl == null || user!.avatarUrl!.isEmpty
-                    ? const Icon(
-                        Icons.person_rounded,
-                        size: 72,
-                        color: Colors.white,
-                      )
-                    : null,
+              child: Container(
+                width: 140,
+                height: 140,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFE5E5EA),
+                  shape: BoxShape.circle,
+                ),
+                child: ClipOval(
+                  child: avatarUrl == null || avatarUrl.isEmpty
+                      ? const Icon(
+                          Icons.person_rounded,
+                          size: 72,
+                          color: Colors.white,
+                        )
+                      : Image.network(
+                          avatarUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => const Icon(
+                            Icons.person_rounded,
+                            size: 72,
+                            color: Colors.white,
+                          ),
+                        ),
+                ),
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 26),
             Center(
               child: Text(
                 user?.fullName ?? 'Transfa customer',
                 style: AppTypography.displayMedium.copyWith(
+                  color: const Color(0xFF111111),
                   fontWeight: FontWeight.w800,
                   fontSize: 28,
                 ),
               ),
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 42),
             Container(
+              width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
               decoration: BoxDecoration(
                 gradient: AppColors.primaryGradient,
@@ -110,14 +164,11 @@ class ShareAccountScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    account.replaceAllMapped(
-                      RegExp(r'(\d{3})(\d{3})(\d{4})'),
-                      (m) => '${m[1]} ${m[2]} ${m[3]}',
-                    ),
+                    _formattedAccountNumber,
                     style: AppTypography.displayLarge.copyWith(
                       color: Colors.white,
-                      fontSize: 36,
-                      fontWeight: FontWeight.w800,
+                      fontSize: 34,
+                      fontWeight: FontWeight.w500,
                       letterSpacing: 2,
                     ),
                   ),

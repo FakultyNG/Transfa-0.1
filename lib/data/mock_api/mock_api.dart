@@ -485,6 +485,10 @@ class MockApi implements TransfaApi {
   }
 
   @override
+  Future<List<TransfaContact>> matchContacts(List<String> phoneNumbers) =>
+      _delay(const []);
+
+  @override
   Future<List<GiftCardProduct>> listGiftCards() => _delay(const [
     GiftCardProduct(
       id: 'gift_reeplay_usd',

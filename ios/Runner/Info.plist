@@ -66,6 +66,8 @@
 		<string>We need camera access to capture your face for identity verification</string>
 		<key>NSFaceIDUsageDescription</key>
 		<string>Use Face ID to securely access your Transfa account.</string>
+		<key>NSContactsUsageDescription</key>
+		<string>Transfa uses your contacts to show people you can pay.</string>
 		<!-- ios/Runner/Info.plist -->
 		<key>LSApplicationQueriesSchemes</key>
 		<array>

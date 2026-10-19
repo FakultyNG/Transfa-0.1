@@ -329,6 +329,8 @@ class TransferRepository {
     required String type,
   }) => _api.searchBeneficiaries(query: query, type: type);
   Future<void> deleteBeneficiary(String id) => _api.deleteBeneficiary(id);
+  Future<List<TransfaContact>> matchContacts(List<String> phoneNumbers) =>
+      _api.matchContacts(phoneNumbers);
 
   Future<AppTransaction> confirm({
     required TransferQuote quote,

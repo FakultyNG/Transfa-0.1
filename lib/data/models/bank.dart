@@ -82,3 +82,36 @@ class Beneficiary {
   final String? accountName;
   final DateTime? lastUsedAt;
 }
+
+class TransfaContact {
+  const TransfaContact({
+    required this.userId,
+    required this.phoneNumber,
+    required this.displayName,
+    required this.accountNumber,
+    required this.accountName,
+    required this.bankName,
+    required this.bankCode,
+    this.profileImageUrl,
+  });
+
+  factory TransfaContact.fromJson(Map<String, dynamic> json) => TransfaContact(
+    userId: json['userId'].toString(),
+    phoneNumber: json['phoneNumber'].toString(),
+    displayName: json['displayName'].toString(),
+    profileImageUrl: json['profileImageUrl']?.toString(),
+    accountNumber: json['accountNumber'].toString(),
+    accountName: json['accountName'].toString(),
+    bankName: json['bankName'].toString(),
+    bankCode: json['bankCode'].toString(),
+  );
+
+  final String userId;
+  final String phoneNumber;
+  final String displayName;
+  final String? profileImageUrl;
+  final String accountNumber;
+  final String accountName;
+  final String bankName;
+  final String bankCode;
+}

@@ -144,6 +144,7 @@ abstract interface class TransfaApi {
     required String type,
   });
   Future<void> deleteBeneficiary(String id);
+  Future<List<TransfaContact>> matchContacts(List<String> phoneNumbers);
 
   Future<List<GiftCardProduct>> listGiftCards();
   Future<GiftCardQuote> quoteGiftCard({

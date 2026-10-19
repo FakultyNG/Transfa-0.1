@@ -557,8 +557,8 @@ class RestTransfaApi implements TransfaApi {
             : '$_api/transfers/ngn/confirm',
         data: {
           'quoteId': quote.quoteId,
-          if (passcode != null) 'passcode': passcode,
-          if (biometricDeviceId != null) 'biometricDeviceId': biometricDeviceId,
+          'passcode': ?passcode,
+          'biometricDeviceId': ?biometricDeviceId,
           if (isForeign) 'purpose': 'supplier_payment',
           if (!isForeign) 'narration': memo ?? 'TF Transfer',
         },
@@ -655,6 +655,25 @@ class RestTransfaApi implements TransfaApi {
   @override
   Future<void> deleteBeneficiary(String id) async {
     _data(await _client.delete('$_api/transfers/recent-beneficiaries/$id'));
+  }
+
+  @override
+  Future<List<TransfaContact>> matchContacts(List<String> phoneNumbers) async {
+    final data = _dataMap(
+      await _client.post(
+        '$_api/transfers/contacts/match',
+        data: {'phoneNumbers': phoneNumbers},
+      ),
+    );
+    final items = data['items'];
+    if (items is! List) {
+      throw const ApiException(
+        message: 'The Transfa contacts response was not valid.',
+      );
+    }
+    return items
+        .map((item) => TransfaContact.fromJson(_requiredMap(item)))
+        .toList();
   }
 
   @override

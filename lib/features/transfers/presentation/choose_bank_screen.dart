@@ -1,95 +1,50 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
-import '../../../features/pop-ups/bank_unavailable_popup.dart';
 import '../../../core/constants/assets.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/utils/error_messages.dart';
+import '../../../data/models/bank.dart';
+import '../../../data/repositories/repositories.dart';
 
-class ChooseBankScreen extends StatefulWidget {
-  const ChooseBankScreen({super.key});
+class ChooseBankArgs {
+  const ChooseBankArgs({this.suggestions = const []});
 
-  @override
-  State<ChooseBankScreen> createState() => _ChooseBankScreenState();
+  final List<BankSuggestion> suggestions;
 }
 
-class _ChooseBankScreenState extends State<ChooseBankScreen> {
+class ChooseBankScreen extends ConsumerStatefulWidget {
+  const ChooseBankScreen({super.key, this.args = const ChooseBankArgs()});
+
+  final ChooseBankArgs args;
+
+  @override
+  ConsumerState<ChooseBankScreen> createState() => _ChooseBankScreenState();
+}
+
+class _ChooseBankScreenState extends ConsumerState<ChooseBankScreen> {
   final TextEditingController _search = TextEditingController();
   final FocusNode _searchFocus = FocusNode();
   String _query = '';
 
-  static const List<_Bank> _all = [
-    _Bank('Chase', _Logo.chase),
-    _Bank('OPay', _Logo.opay),
-    _Bank('FCMB', _Logo.fcmb),
-    _Bank('GTBank', _Logo.gtb),
-    _Bank('Access Bank', _Logo.access),
-    _Bank('First Bank', _Logo.firstBank),
-    _Bank('Zenith Bank', _Logo.zenith),
-    _Bank('UBA', _Logo.uba),
-    _Bank('Kuda', _Logo.kuda),
-    _Bank('Wema Bank', _Logo.wema),
-    _Bank('Sterling Bank', _Logo.sterling),
-    _Bank('PalmPay', _Logo.palmpay),
-    _Bank('Moneypoint', _Logo.moneypoint),
-    _Bank('Stanbic IBTC', _Logo.stanbic),
-    _Bank('Union Bank', _Logo.union),
-  ];
+  List<_Bank> _all = const [];
+  bool _loading = true;
+  String? _error;
 
-  static const List<_Bank> _suggestions = [
-    _Bank('Chase', _Logo.chase),
-    _Bank('OPay', _Logo.opay),
-    _Bank('FCMB', _Logo.fcmb),
-  ];
-
-  // Helper method to get bank logo widget
-  Widget _getBankLogoWidget(_Bank bank) {
-    switch (bank.logo) {
-      case _Logo.opay:
-        return ClipOval(
-          child: Image.asset(Assets.bankOpay, width: 40, height: 40, fit: BoxFit.cover),
-        );
-      case _Logo.fcmb:
-        return ClipOval(
-          child: Image.asset(Assets.bankFcmb, width: 40, height: 40, fit: BoxFit.cover),
-        );
-      case _Logo.chase:
-        return Container(
-          width: 40,
-          height: 40,
-          decoration: const BoxDecoration(
-            color: Color(0xFFEAEAEE),
-            shape: BoxShape.circle,
+  List<_Bank> get _suggestions {
+    final recognized = widget.args.suggestions
+        .map(
+          (suggestion) => _Bank(
+            suggestion.bankName,
+            _logoForName(suggestion.bankName),
+            code: suggestion.bankCode,
           ),
-          padding: const EdgeInsets.all(9),
-          child: const CustomPaint(painter: _ChaseLogoPainter()),
-        );
-      case _Logo.gtb:
-        return _InitialAvatar(initials: 'GT', bg: const Color(0xFFE85A1F), fg: Colors.white);
-      case _Logo.access:
-        return _InitialAvatar(initials: 'AB', bg: const Color(0xFFEF3E33), fg: Colors.white);
-      case _Logo.firstBank:
-        return _InitialAvatar(initials: 'FB', bg: const Color(0xFF003B71), fg: Colors.white);
-      case _Logo.zenith:
-        return _InitialAvatar(initials: 'ZB', bg: const Color(0xFFE60012), fg: Colors.white);
-      case _Logo.uba:
-        return _InitialAvatar(initials: 'U', bg: const Color(0xFFCC0000), fg: Colors.white);
-      case _Logo.kuda:
-        return _InitialAvatar(initials: 'K', bg: const Color(0xFF40196D), fg: Colors.white);
-      case _Logo.wema:
-        return _InitialAvatar(initials: 'W', bg: const Color(0xFF6F2C91), fg: Colors.white);
-      case _Logo.sterling:
-        return _InitialAvatar(initials: 'S', bg: const Color(0xFFD8232A), fg: Colors.white);
-      case _Logo.palmpay:
-        return _InitialAvatar(initials: 'P', bg: const Color(0xFF6238FB), fg: Colors.white);
-      case _Logo.moneypoint:
-        return _InitialAvatar(initials: 'M', bg: const Color(0xFF0357EE), fg: Colors.white);
-      case _Logo.stanbic:
-        return _InitialAvatar(initials: 'SI', bg: const Color(0xFF0033A0), fg: Colors.white);
-      case _Logo.union:
-        return _InitialAvatar(initials: 'UB', bg: const Color(0xFF003E7E), fg: Colors.white);
-    }
+        )
+        .toList();
+    return recognized.isNotEmpty ? recognized : _all.take(3).toList();
   }
 
   // Helper method to get bank logo asset
@@ -125,6 +80,8 @@ class _ChooseBankScreenState extends State<ChooseBankScreen> {
         return Assets.bankBlack;
       case _Logo.union:
         return Assets.bankBlack;
+      case _Logo.generic:
+        return Assets.bankBlack;
     }
   }
 
@@ -147,26 +104,16 @@ class _ChooseBankScreenState extends State<ChooseBankScreen> {
   }
 
   void _handleBankSelection(_Bank bank) {
-    if (bank.name == 'OPay') {
-      showBankUnavailablePopup(
-        context,
-        bankName: bank.name,
-        onContinueWithTransfa: () {
-          debugPrint('Continue with Transfa for ${bank.name}');
-        },
-      );
-    } else {
-      final gradient = _getBankGradients(bank);
-      final result = {
-        'name': bank.name,
-        'logo': _getBankLogoAsset(bank),
-        'gradientColor1': gradient.$1,
-        'gradientColor2': gradient.$2,
-        // Store the logo type so PaySheet knows how to render it
-        'logoType': _getLogoType(bank),
-      };
-      context.pop(result);
-    }
+    final gradient = _getBankGradients(bank);
+    final result = {
+      'code': bank.code,
+      'name': bank.name,
+      'logo': _getBankLogoAsset(bank),
+      'gradientColor1': gradient.$1,
+      'gradientColor2': gradient.$2,
+      'logoType': _getLogoType(bank),
+    };
+    context.pop(result);
   }
 
   // Helper to determine logo type
@@ -189,6 +136,42 @@ class _ChooseBankScreenState extends State<ChooseBankScreen> {
       final q = _search.text.trim();
       if (q != _query) setState(() => _query = q);
     });
+    Future.microtask(_loadBanks);
+  }
+
+  Future<void> _loadBanks() async {
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
+    try {
+      ref.invalidate(ngnBanksProvider);
+      final banks = await ref.read(ngnBanksProvider.future);
+      if (!mounted) return;
+      setState(() {
+        _all =
+            banks
+                .map(
+                  (bank) => _Bank(
+                    bank.name,
+                    _logoForName(bank.name),
+                    code: bank.code,
+                  ),
+                )
+                .toList()
+              ..sort((left, right) => left.name.compareTo(right.name));
+        _loading = false;
+        _error = _all.isEmpty ? 'No banks are currently available.' : null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = userFacingError(error);
+      });
+    }
   }
 
   @override
@@ -220,7 +203,7 @@ class _ChooseBankScreenState extends State<ChooseBankScreen> {
                 const _HeroCard(),
                 const SizedBox(height: 28),
 
-                if (!searching) ...[
+                if (!searching && !_loading && _suggestions.isNotEmpty) ...[
                   const _SectionHeader(
                     label: 'Suggestions',
                     glyph: _SectionGlyph.suggestions,
@@ -247,7 +230,33 @@ class _ChooseBankScreenState extends State<ChooseBankScreen> {
                 const SizedBox(height: 14),
                 _GroupedCard(
                   children: [
-                    if (_filtered.isEmpty)
+                    if (_loading)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 32),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else if (_error != null)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),
+                        child: Column(
+                          children: [
+                            Text(
+                              _error!,
+                              textAlign: TextAlign.center,
+                              style: AppTypography.body.copyWith(
+                                color: Colors.black54,
+                                fontSize: 15,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            TextButton(
+                              onPressed: _loadBanks,
+                              child: const Text('Try again'),
+                            ),
+                          ],
+                        ),
+                      )
+                    else if (_filtered.isEmpty)
                       Padding(
                         padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),
                         child: Text(
@@ -342,7 +351,10 @@ class _HeroCard extends StatelessWidget {
               child: SvgPicture.asset(
                 Assets.bank,
                 fit: BoxFit.contain,
-                colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+                colorFilter: const ColorFilter.mode(
+                  Colors.white,
+                  BlendMode.srcIn,
+                ),
               ),
             ),
           ),
@@ -395,7 +407,10 @@ class _SectionHeader extends StatelessWidget {
                 : SvgPicture.asset(
                     Assets.bank,
                     fit: BoxFit.contain,
-                    colorFilter: const ColorFilter.mode(Colors.black, BlendMode.srcIn),
+                    colorFilter: const ColorFilter.mode(
+                      Colors.black,
+                      BlendMode.srcIn,
+                    ),
                   ),
           ),
           const SizedBox(width: 10),
@@ -519,10 +534,13 @@ class _BankRow extends StatelessWidget {
               onTap: onTap,
               borderRadius: BorderRadius.circular(28),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 child: Row(
                   children: [
-                    _BankAvatar(logo: bank.logo),
+                    _BankAvatar(bank: bank),
                     const SizedBox(width: 14),
                     Expanded(
                       child: Text(
@@ -704,6 +722,46 @@ class _GlassShell extends StatelessWidget {
 //  Bank model + avatar rendering
 // ============================================================
 
+_Logo _logoForName(String bankName) {
+  final name = bankName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+  if (name.contains('opay')) return _Logo.opay;
+  if (name.contains('fcmb') || name.contains('firstcitymonument')) {
+    return _Logo.fcmb;
+  }
+  if (name.contains('chase')) return _Logo.chase;
+  if (name.contains('guarantytrust') || name.contains('gtbank')) {
+    return _Logo.gtb;
+  }
+  if (name.contains('access')) return _Logo.access;
+  if (name.contains('firstbank')) return _Logo.firstBank;
+  if (name.contains('zenith')) return _Logo.zenith;
+  if (name == 'uba' || name.contains('unitedbankforafrica')) return _Logo.uba;
+  if (name.contains('kuda')) return _Logo.kuda;
+  if (name.contains('wema')) return _Logo.wema;
+  if (name.contains('sterling')) return _Logo.sterling;
+  if (name.contains('palmpay')) return _Logo.palmpay;
+  if (name.contains('moniepoint') || name.contains('moneypoint')) {
+    return _Logo.moneypoint;
+  }
+  if (name.contains('stanbic')) return _Logo.stanbic;
+  if (name.contains('unionbank')) return _Logo.union;
+  return _Logo.generic;
+}
+
+String _bankInitials(String bankName) {
+  final words = bankName
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((word) => word.isNotEmpty)
+      .toList();
+  if (words.isEmpty) return 'B';
+  if (words.length == 1) {
+    final end = words.first.length >= 2 ? 2 : 1;
+    return words.first.substring(0, end).toUpperCase();
+  }
+  return '${words.first[0]}${words[1][0]}'.toUpperCase();
+}
+
 enum _Logo {
   chase,
   opay,
@@ -720,29 +778,41 @@ enum _Logo {
   moneypoint,
   stanbic,
   union,
+  generic,
 }
 
 class _Bank {
   final String name;
   final _Logo logo;
-  const _Bank(this.name, this.logo);
+  final String code;
+  const _Bank(this.name, this.logo, {this.code = ''});
 }
 
 class _BankAvatar extends StatelessWidget {
-  final _Logo logo;
-  const _BankAvatar({required this.logo});
+  final _Bank bank;
+  const _BankAvatar({required this.bank});
 
   @override
   Widget build(BuildContext context) {
     final size = 40.0;
-    switch (logo) {
+    switch (bank.logo) {
       case _Logo.opay:
         return ClipOval(
-          child: Image.asset(Assets.bankOpay, width: size, height: size, fit: BoxFit.cover),
+          child: Image.asset(
+            Assets.bankOpay,
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+          ),
         );
       case _Logo.fcmb:
         return ClipOval(
-          child: Image.asset(Assets.bankFcmb, width: size, height: size, fit: BoxFit.cover),
+          child: Image.asset(
+            Assets.bankFcmb,
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+          ),
         );
       case _Logo.chase:
         return Container(
@@ -756,29 +826,83 @@ class _BankAvatar extends StatelessWidget {
           child: const CustomPaint(painter: _ChaseLogoPainter()),
         );
       case _Logo.gtb:
-        return _InitialAvatar(initials: 'GT', bg: const Color(0xFFE85A1F), fg: Colors.white);
+        return _InitialAvatar(
+          initials: 'GT',
+          bg: const Color(0xFFE85A1F),
+          fg: Colors.white,
+        );
       case _Logo.access:
-        return _InitialAvatar(initials: 'AB', bg: const Color(0xFFEF3E33), fg: Colors.white);
+        return _InitialAvatar(
+          initials: 'AB',
+          bg: const Color(0xFFEF3E33),
+          fg: Colors.white,
+        );
       case _Logo.firstBank:
-        return _InitialAvatar(initials: 'FB', bg: const Color(0xFF003B71), fg: Colors.white);
+        return _InitialAvatar(
+          initials: 'FB',
+          bg: const Color(0xFF003B71),
+          fg: Colors.white,
+        );
       case _Logo.zenith:
-        return _InitialAvatar(initials: 'ZB', bg: const Color(0xFFE60012), fg: Colors.white);
+        return _InitialAvatar(
+          initials: 'ZB',
+          bg: const Color(0xFFE60012),
+          fg: Colors.white,
+        );
       case _Logo.uba:
-        return _InitialAvatar(initials: 'U', bg: const Color(0xFFCC0000), fg: Colors.white);
+        return _InitialAvatar(
+          initials: 'U',
+          bg: const Color(0xFFCC0000),
+          fg: Colors.white,
+        );
       case _Logo.kuda:
-        return _InitialAvatar(initials: 'K', bg: const Color(0xFF40196D), fg: Colors.white);
+        return _InitialAvatar(
+          initials: 'K',
+          bg: const Color(0xFF40196D),
+          fg: Colors.white,
+        );
       case _Logo.wema:
-        return _InitialAvatar(initials: 'W', bg: const Color(0xFF6F2C91), fg: Colors.white);
+        return _InitialAvatar(
+          initials: 'W',
+          bg: const Color(0xFF6F2C91),
+          fg: Colors.white,
+        );
       case _Logo.sterling:
-        return _InitialAvatar(initials: 'S', bg: const Color(0xFFD8232A), fg: Colors.white);
+        return _InitialAvatar(
+          initials: 'S',
+          bg: const Color(0xFFD8232A),
+          fg: Colors.white,
+        );
       case _Logo.palmpay:
-        return _InitialAvatar(initials: 'P', bg: const Color(0xFF6238FB), fg: Colors.white);
+        return _InitialAvatar(
+          initials: 'P',
+          bg: const Color(0xFF6238FB),
+          fg: Colors.white,
+        );
       case _Logo.moneypoint:
-        return _InitialAvatar(initials: 'M', bg: const Color(0xFF0357EE), fg: Colors.white);
+        return _InitialAvatar(
+          initials: 'M',
+          bg: const Color(0xFF0357EE),
+          fg: Colors.white,
+        );
       case _Logo.stanbic:
-        return _InitialAvatar(initials: 'SI', bg: const Color(0xFF0033A0), fg: Colors.white);
+        return _InitialAvatar(
+          initials: 'SI',
+          bg: const Color(0xFF0033A0),
+          fg: Colors.white,
+        );
       case _Logo.union:
-        return _InitialAvatar(initials: 'UB', bg: const Color(0xFF003E7E), fg: Colors.white);
+        return _InitialAvatar(
+          initials: 'UB',
+          bg: const Color(0xFF003E7E),
+          fg: Colors.white,
+        );
+      case _Logo.generic:
+        return _InitialAvatar(
+          initials: _bankInitials(bank.name),
+          bg: const Color(0xFF1976D2),
+          fg: Colors.white,
+        );
     }
   }
 }
@@ -787,7 +911,11 @@ class _InitialAvatar extends StatelessWidget {
   final String initials;
   final Color bg;
   final Color fg;
-  const _InitialAvatar({required this.initials, required this.bg, required this.fg});
+  const _InitialAvatar({
+    required this.initials,
+    required this.bg,
+    required this.fg,
+  });
 
   @override
   Widget build(BuildContext context) {

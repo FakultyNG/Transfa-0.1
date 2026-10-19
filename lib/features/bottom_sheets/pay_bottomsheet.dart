@@ -15,6 +15,8 @@ import '../../../data/models/transaction.dart';
 import '../../../data/repositories/repositories.dart';
 import '../../../core/utils/error_messages.dart';
 import '../transfers/presentation/transfer_state.dart';
+import '../transfers/presentation/choose_bank_screen.dart';
+import '../transfers/presentation/recipient_picker_screen.dart';
 
 // ============================================================
 // PAY SHEET BOTTOM SHEET
@@ -112,39 +114,15 @@ class _PaySheetState extends ConsumerState<PaySheet> {
 
   Future<void> _chooseLiveBank() async {
     try {
-      final banks = await ref.read(ngnBanksProvider.future);
-      if (!mounted) return;
-      final suggestedCodes = _suggestions.map((item) => item.bankCode).toSet();
-      final ordered = [...banks]
-        ..sort((left, right) {
-          final leftSuggested = suggestedCodes.contains(left.code);
-          final rightSuggested = suggestedCodes.contains(right.code);
-          if (leftSuggested == rightSuggested)
-            return left.name.compareTo(right.name);
-          return leftSuggested ? -1 : 1;
-        });
-      final bank = await showModalBottomSheet<Bank>(
-        context: context,
-        backgroundColor: const Color(0xFFFCFCFB),
-        showDragHandle: true,
-        builder: (context) => SafeArea(
-          child: ListView.builder(
-            itemCount: ordered.length,
-            itemBuilder: (context, index) {
-              final item = ordered[index];
-              return ListTile(
-                leading: const Icon(Icons.account_balance_rounded),
-                title: Text(item.name),
-                subtitle: suggestedCodes.contains(item.code)
-                    ? const Text('Recognized for this account number')
-                    : null,
-                onTap: () => Navigator.pop(context, item),
-              );
-            },
-          ),
-        ),
+      final result = await context.push<Map<String, dynamic>>(
+        Routes.chooseBank,
+        extra: ChooseBankArgs(suggestions: _suggestions),
       );
-      if (bank == null || !mounted) return;
+      if (result == null || !mounted) return;
+      final code = result['code']?.toString() ?? '';
+      final name = result['name']?.toString() ?? '';
+      if (code.isEmpty || name.isEmpty) return;
+      final bank = Bank(code: code, name: name);
       setState(() {
         _selectedBankModel = bank;
         _selectedBank = bank.name;
@@ -160,11 +138,36 @@ class _PaySheetState extends ConsumerState<PaySheet> {
     }
   }
 
+  Future<void> _chooseRecipient() async {
+    final result = await context.push<RecipientPickerResult>(
+      Routes.recipientPick,
+      extra: RecipientPickerArgs(
+        amount: widget.amount,
+        currency: widget.currency,
+        memo: _memoController.text,
+        onMemoChanged: widget.onMemoChanged,
+      ),
+    );
+    if (result == null || !mounted) return;
+    _accountController.text = result.accountNumber;
+    setState(() {
+      _selectedAccountNumber = result.accountNumber;
+      _selectedBank = result.bankName;
+      _selectedBankModel = Bank(code: result.bankCode, name: result.bankName);
+      _selectedRecipientName = result.name;
+      _selectedRecipientImage = result.imageUrl;
+      _suggestions = const [];
+      _quote = null;
+    });
+    await _loadQuote();
+  }
+
   Future<void> _loadQuote() async {
     final bank = _selectedBankModel;
     final amount = double.tryParse(widget.amount.replaceAll(',', '')) ?? 0;
-    if (bank == null || _selectedAccountNumber.length != 10 || amount <= 0)
+    if (bank == null || _selectedAccountNumber.length != 10 || amount <= 0) {
       return;
+    }
     setState(() => _loading = true);
     try {
       final repository = ref.read(transferRepositoryProvider);
@@ -221,11 +224,13 @@ class _PaySheetState extends ConsumerState<PaySheet> {
         _selectedRecipientImage!.isNotEmpty) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(35),
-        child: Image.asset(
+        child: Image.network(
           _selectedRecipientImage!,
           width: 30,
           height: 30,
           fit: BoxFit.cover,
+          errorBuilder: (_, _, _) =>
+              SvgPicture.asset(Assets.contacts, width: 26, height: 26),
         ),
       );
     } else {
@@ -357,7 +362,7 @@ class _PaySheetState extends ConsumerState<PaySheet> {
       height: (MediaQuery.of(context).size.height * 0.7),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: const Color(0xFFFCFCFB).withOpacity(0.5),
+        color: const Color(0xFFFCFCFB).withValues(alpha: 0.5),
         borderRadius: const BorderRadius.only(
           topLeft: Radius.circular(45),
           topRight: Radius.circular(45),
@@ -408,7 +413,9 @@ class _PaySheetState extends ConsumerState<PaySheet> {
                           width: 40,
                           height: 40,
                           decoration: BoxDecoration(
-                            color: const Color(0xFFFCFCFB).withOpacity(0.1),
+                            color: const Color(
+                              0xFFFCFCFB,
+                            ).withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(35),
                           ),
                           alignment: Alignment.center,
@@ -479,22 +486,26 @@ class _PaySheetState extends ConsumerState<PaySheet> {
                                   ),
                                 ),
                               ),
-                              Container(
-                                width: 30,
-                                height: 30,
-                                decoration: BoxDecoration(
-                                  gradient: const LinearGradient(
-                                    begin: Alignment.topCenter,
-                                    end: Alignment.bottomCenter,
-                                    colors: [
-                                      Color(0xFF07B826),
-                                      Color(0xFF4EE659),
-                                    ],
+                              GestureDetector(
+                                key: const Key('pay-sheet-recipient-picker'),
+                                onTap: _chooseRecipient,
+                                child: Container(
+                                  width: 30,
+                                  height: 30,
+                                  decoration: BoxDecoration(
+                                    gradient: const LinearGradient(
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      colors: [
+                                        Color(0xFF07B826),
+                                        Color(0xFF4EE659),
+                                      ],
+                                    ),
+                                    borderRadius: BorderRadius.circular(35),
                                   ),
-                                  borderRadius: BorderRadius.circular(35),
+                                  alignment: Alignment.center,
+                                  child: _getAccountIcon(),
                                 ),
-                                alignment: Alignment.center,
-                                child: _getAccountIcon(),
                               ),
                             ],
                           ),
@@ -817,7 +828,9 @@ class _PaySheetState extends ConsumerState<PaySheet> {
                                   height: 58,
                                   decoration: BoxDecoration(
                                     border: Border.all(
-                                      color: Colors.black.withOpacity(0.3),
+                                      color: Colors.black.withValues(
+                                        alpha: 0.3,
+                                      ),
                                       width: 3,
                                     ),
                                     borderRadius: BorderRadius.circular(58),

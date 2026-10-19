@@ -180,7 +180,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: Routes.recipientPick,
         pageBuilder: (context, state) => buildPageWithTransition(
-          RecipientPickerScreen(args: state.extra as RecipientPickerArgs),
+          RecipientPickerScreen(args: state.extra as RecipientPickerArgs?),
         ),
       ),
       slideRoute(Routes.recipientProfile, const RecipientProfileScreen()),
@@ -189,7 +189,16 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         Routes.recipientAmountPreview,
         const RecipientAmountPreviewScreen(),
       ),
-      slideRoute(Routes.chooseBank, const ChooseBankScreen()),
+      GoRoute(
+        path: Routes.chooseBank,
+        pageBuilder: (context, state) => buildPageWithTransition(
+          ChooseBankScreen(
+            args: state.extra is ChooseBankArgs
+                ? state.extra as ChooseBankArgs
+                : const ChooseBankArgs(),
+          ),
+        ),
+      ),
       slideRoute(Routes.receiptUniversal, const ReceiptUniversalScreen()),
       slideRoute(Routes.receiptStatus, const ReceiptStatusScreen()),
       slideRoute(Routes.receiptUnable, const ReceiptUnableScreen()),
