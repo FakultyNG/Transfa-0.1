@@ -33,6 +33,10 @@ class TransactionDetailsScreen extends ConsumerWidget {
         if (transaction == null) {
           return const _TransactionLoadState(message: 'Transaction not found.');
         }
+        if (transaction.moneyLimitHold &&
+            transaction.status == TxStatus.pending) {
+          return ReceiptInReviewScreen(transaction: transaction);
+        }
         return TransferReceiptScreen(
           transaction: transaction,
           recipientName: transaction.counterpartyName,

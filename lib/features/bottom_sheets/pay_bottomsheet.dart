@@ -17,6 +17,7 @@ import '../../../core/utils/error_messages.dart';
 import '../transfers/presentation/transfer_state.dart';
 import '../transfers/presentation/choose_bank_screen.dart';
 import '../transfers/presentation/recipient_picker_screen.dart';
+import '../pop-ups/multiple_banks_popup.dart';
 
 // ============================================================
 // PAY SHEET BOTTOM SHEET
@@ -64,6 +65,7 @@ class _PaySheetState extends ConsumerState<PaySheet> {
   List<BankSuggestion> _suggestions = const [];
   TransferQuote? _quote;
   bool _loading = false;
+  String? _lastSuggestedAccount;
 
   double get _totalAmount {
     final amount = double.tryParse(widget.amount.replaceAll(',', '')) ?? 0;
@@ -94,9 +96,12 @@ class _PaySheetState extends ConsumerState<PaySheet> {
     setState(() {
       _selectedAccountNumber = account;
       _selectedRecipientName = '';
+      _selectedBank = '';
+      _selectedBankModel = null;
       _quote = null;
     });
     if (account.length != 10) {
+      _lastSuggestedAccount = null;
       if (_suggestions.isNotEmpty) setState(() => _suggestions = const []);
       return;
     }
@@ -106,10 +111,39 @@ class _PaySheetState extends ConsumerState<PaySheet> {
           .suggestBanks(account);
       if (mounted && _selectedAccountNumber == account) {
         setState(() => _suggestions = suggestions);
+        if (suggestions.isNotEmpty && _lastSuggestedAccount != account) {
+          _lastSuggestedAccount = account;
+          await _showSuggestedBanks(account, suggestions);
+        }
       }
     } catch (_) {
       // The full bank list remains available if provider suggestions fail.
     }
+  }
+
+  Future<void> _showSuggestedBanks(
+    String account,
+    List<BankSuggestion> suggestions,
+  ) async {
+    final selected = await showDialog<BankSuggestion>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.55),
+      builder: (_) =>
+          MultipleBanksPopup(accountNumber: account, suggestions: suggestions),
+    );
+    if (selected == null || !mounted || _selectedAccountNumber != account) {
+      return;
+    }
+    setState(() {
+      _selectedBankModel = Bank(
+        code: selected.bankCode,
+        name: selected.bankName,
+      );
+      _selectedBank = selected.bankName;
+      _selectedRecipientName = selected.accountName;
+      _quote = null;
+    });
+    await _loadQuote();
   }
 
   Future<void> _chooseLiveBank() async {
@@ -632,7 +666,7 @@ class _PaySheetState extends ConsumerState<PaySheet> {
                         ),
                         const SizedBox(height: 20),
 
-                        // Memo Field — icon and text share the same
+                        // Message field — icon and text share the same
                         // vertical center via textAlignVertical.
                         Container(
                           height: 62,
@@ -668,7 +702,8 @@ class _PaySheetState extends ConsumerState<PaySheet> {
                                       color: Colors.black,
                                     ),
                                     decoration: const InputDecoration(
-                                      hintText: "Memo: What's the money for?",
+                                      hintText:
+                                          "Message: What's the money for?",
                                       hintStyle: TextStyle(
                                         fontFamily: 'Roboto',
                                         fontWeight: FontWeight.w400,

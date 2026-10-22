@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../data/models/transaction.dart';
+
 import '../../features/auth/presentation/create_pin_screen.dart';
 import '../../features/auth/presentation/identity_verification_screen.dart';
 import '../../features/auth/presentation/location_screen.dart';
@@ -199,11 +201,29 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           ),
         ),
       ),
-      slideRoute(Routes.receiptUniversal, const ReceiptUniversalScreen()),
+      GoRoute(
+        path: Routes.receiptUniversal,
+        pageBuilder: (context, state) => buildPageWithTransition(
+          ReceiptUniversalScreen(
+            args: state.extra is ReceiptUniversalArgs
+                ? state.extra as ReceiptUniversalArgs
+                : null,
+          ),
+        ),
+      ),
       slideRoute(Routes.receiptStatus, const ReceiptStatusScreen()),
       slideRoute(Routes.receiptUnable, const ReceiptUnableScreen()),
       slideRoute(Routes.receiptReceived, const ReceiptReceivedScreen()),
-      slideRoute(Routes.receiptInReview, const ReceiptInReviewScreen()),
+      GoRoute(
+        path: Routes.receiptInReview,
+        pageBuilder: (context, state) => buildPageWithTransition(
+          ReceiptInReviewScreen(
+            transaction: state.extra is AppTransaction
+                ? state.extra as AppTransaction
+                : null,
+          ),
+        ),
+      ),
       slideRoute(
         Routes.receiptReceivedCompany,
         const ReceiptReceivedCompanyScreen(),

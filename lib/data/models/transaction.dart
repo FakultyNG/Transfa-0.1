@@ -49,6 +49,9 @@ class AppTransaction {
   final String? bankName;
   final String? memo;
   final String? counterpartyProfileImageUrl;
+  final bool moneyLimitHold;
+  final String? requiredTier;
+  final DateTime? holdExpiresAt;
   final DateTime createdAt;
 
   const AppTransaction({
@@ -67,42 +70,63 @@ class AppTransaction {
     this.bankName,
     this.memo,
     this.counterpartyProfileImageUrl,
+    this.moneyLimitHold = false,
+    this.requiredTier,
+    this.holdExpiresAt,
   });
 
-  factory AppTransaction.fromJson(Map<String, dynamic> json) => AppTransaction(
-    id: json['id'].toString(),
-    type: _txType(json['type']),
-    status: _txStatus(json['status']),
-    currency: _txCurrency(json['currency']),
-    amount: _asDouble(json['amount']),
-    fee: _optionalDouble(json['fee']),
-    totalDebit: _optionalDouble(
-      json['totalDebit'] ?? json['total_debit'] ?? json['amount'],
-    ),
-    reference: json['reference']?.toString(),
-    ngnAmount: json['ngn_amount'] == null && json['ngnAmount'] == null
-        ? null
-        : _asDouble(json['ngn_amount'] ?? json['ngnAmount']),
-    counterpartyName:
-        (json['counterparty_name'] ??
-                json['counterpartyName'] ??
-                json['recipientName'] ??
-                json['description'] ??
-                'Transaction')
-            .toString(),
-    counterpartyAccount:
-        (json['counterparty_account'] ?? json['counterpartyAccount'])
-            ?.toString(),
-    bankName: (json['bank_name'] ?? json['bankName'])?.toString(),
-    memo: (json['memo'] ?? json['narration'])?.toString(),
-    counterpartyProfileImageUrl: json['counterpartyProfileImageUrl']
-        ?.toString(),
-    createdAt:
-        DateTime.tryParse(
-          (json['created_at'] ?? json['createdAt'] ?? '').toString(),
-        ) ??
-        DateTime.now(),
-  );
+  factory AppTransaction.fromJson(Map<String, dynamic> json) {
+    final metadata = json['metadata'] is Map
+        ? Map<String, dynamic>.from(json['metadata'] as Map)
+        : const <String, dynamic>{};
+    return AppTransaction(
+      id: json['id'].toString(),
+      type: _txType(json['type']),
+      status: _txStatus(json['status']),
+      currency: _txCurrency(json['currency']),
+      amount: _asDouble(json['amount']),
+      fee: _optionalDouble(json['fee']),
+      totalDebit: _optionalDouble(
+        json['totalDebit'] ?? json['total_debit'] ?? json['amount'],
+      ),
+      reference: json['reference']?.toString(),
+      ngnAmount: json['ngn_amount'] == null && json['ngnAmount'] == null
+          ? null
+          : _asDouble(json['ngn_amount'] ?? json['ngnAmount']),
+      counterpartyName:
+          (json['counterparty_name'] ??
+                  json['counterpartyName'] ??
+                  json['recipientName'] ??
+                  metadata['accountName'] ??
+                  json['description'] ??
+                  'Transaction')
+              .toString(),
+      counterpartyAccount:
+          (json['counterparty_account'] ??
+                  json['counterpartyAccount'] ??
+                  metadata['accountNumber'])
+              ?.toString(),
+      bankName: (json['bank_name'] ?? json['bankName'] ?? metadata['bankName'])
+          ?.toString(),
+      memo: (json['memo'] ?? json['narration'] ?? metadata['memo'])?.toString(),
+      counterpartyProfileImageUrl:
+          (json['counterpartyProfileImageUrl'] ??
+                  metadata['counterpartyProfileImageUrl'])
+              ?.toString(),
+      moneyLimitHold:
+          json['moneyLimitHold'] == true || metadata['moneyLimitHold'] == true,
+      requiredTier: (json['requiredTier'] ?? metadata['requiredTier'])
+          ?.toString(),
+      holdExpiresAt: DateTime.tryParse(
+        (json['holdExpiresAt'] ?? metadata['holdExpiresAt'] ?? '').toString(),
+      ),
+      createdAt:
+          DateTime.tryParse(
+            (json['created_at'] ?? json['createdAt'] ?? '').toString(),
+          ) ??
+          DateTime.now(),
+    );
+  }
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -121,6 +145,10 @@ class AppTransaction {
     if (memo != null) 'memo': memo,
     if (counterpartyProfileImageUrl != null)
       'counterpartyProfileImageUrl': counterpartyProfileImageUrl,
+    if (moneyLimitHold) 'moneyLimitHold': true,
+    if (requiredTier != null) 'requiredTier': requiredTier,
+    if (holdExpiresAt != null)
+      'holdExpiresAt': holdExpiresAt!.toUtc().toIso8601String(),
     'created_at': createdAt.toUtc().toIso8601String(),
   };
 }

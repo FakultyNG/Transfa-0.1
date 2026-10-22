@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:transfa/features/pop-ups/businessBanking_popup.dart';
 import 'package:transfa/features/pop-ups/personalBanking_popup.dart';
 import 'package:transfa/features/pop-ups/transfaAccountPreview_popup.dart';
@@ -18,18 +21,56 @@ import '../../../shared/widgets/transfa_logo.dart';
 import '../../../features/pop-ups/transfaStatusProgress_popup.dart';
 import '../../../features/pop-ups/transfaStatusUnavailable_popup.dart';
 import '../../../features/pop-ups/transfaStatus_popup.dart';
-import '../../../features/pop-ups/stampDuty_popup.dart';
 
 /// Universal-Income style receipt — Magic sends ₦2,000,000.
-class ReceiptUniversalScreen extends ConsumerWidget {
-  const ReceiptUniversalScreen({super.key});
+class ReceiptUniversalArgs {
+  const ReceiptUniversalArgs({
+    required this.transaction,
+    required this.recipientName,
+  });
+  final AppTransaction transaction;
+  final String recipientName;
+}
+
+class ReceiptUniversalScreen extends ConsumerStatefulWidget {
+  const ReceiptUniversalScreen({super.key, this.args});
+  final ReceiptUniversalArgs? args;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return const _UniversalReceiptPage(
-      amount: '₦2,000,000',
-      subtitle: 'Sent for 10 Acres',
-      recipientName: 'Magic',
+  ConsumerState<ReceiptUniversalScreen> createState() =>
+      _ReceiptUniversalScreenState();
+}
+
+class _ReceiptUniversalScreenState
+    extends ConsumerState<ReceiptUniversalScreen> {
+  bool _openedShare = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (widget.args != null && !_openedShare) {
+      _openedShare = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        final tx = widget.args!.transaction;
+        await SharePlus.instance.share(
+          ShareParams(
+            text:
+                'Transfa receipt\n${AppFormat.ngn(tx.amount)}\n${widget.args!.recipientName}\nReference: ${tx.reference ?? tx.id}',
+          ),
+        );
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tx = widget.args?.transaction;
+    return _UniversalReceiptPage(
+      amount: tx == null ? '₦2,000,000' : AppFormat.ngn(tx.amount),
+      subtitle: tx == null
+          ? ''
+          : (tx.memo?.isNotEmpty == true ? tx.memo! : 'Transfer completed'),
+      recipientName: widget.args?.recipientName ?? 'Magic',
       recipientAsset: Assets.magic,
     );
   }
@@ -241,9 +282,20 @@ class ReceiptStatusScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final shareTransaction = AppTransaction(
+      id: 'receipt-status',
+      type: TxType.debit,
+      status: TxStatus.success,
+      currency: TxCurrency.ngn,
+      amount: 2000000,
+      counterpartyName: 'Magic Payma',
+      memo: 'Hi handsome. What\'s up?',
+      reference: 'receipt-status',
+      createdAt: DateTime.now(),
+    );
     return _ReceiptPage(
       amount: '₦2,000,000',
-      subtitle: 'Sent for 10 Acres',
+      subtitle: '',
       recipient: const _ReceiptRecipient(
         name: 'Magic Payma',
         assetImage: Assets.magic,
@@ -254,7 +306,13 @@ class ReceiptStatusScreen extends ConsumerWidget {
       total: '₦2,026,000',
       supportStyle: _ReceiptSupportStyle.row,
       showShare: true,
-      onShare: () => context.push(Routes.receiptUniversal),
+      onShare: () => context.push(
+        Routes.receiptUniversal,
+        extra: ReceiptUniversalArgs(
+          transaction: shareTransaction,
+          recipientName: 'Magic Payma',
+        ),
+      ),
       bankName: 'GTBank',
       accountNumber: '0123456789',
     );
@@ -278,8 +336,7 @@ class ReceiptUnableScreen extends ConsumerWidget {
       memo: 'April Salary',
       status: _ReceiptStatus.unable,
       transactionFee: '₦5 Fee',
-      stampDuty: r'$50 Fee',
-      total: '₦36,055',
+      total: '₦36,005',
       supportStyle: _ReceiptSupportStyle.tile,
       showShare: false,
       bankName: 'Access Bank',
@@ -292,41 +349,98 @@ class ReceiptUnableScreen extends ConsumerWidget {
 /// summary is replaced by a Support Memo card with a countdown timer and
 /// two action pills (Add BVN / Add Address) that move the user along the
 /// flow. Amount renders in orange to flag the pending state.
-class ReceiptInReviewScreen extends ConsumerWidget {
-  const ReceiptInReviewScreen({super.key});
+class ReceiptInReviewScreen extends ConsumerStatefulWidget {
+  const ReceiptInReviewScreen({super.key, this.transaction});
+  final AppTransaction? transaction;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ReceiptInReviewScreen> createState() =>
+      _ReceiptInReviewScreenState();
+}
+
+class _ReceiptInReviewScreenState extends ConsumerState<ReceiptInReviewScreen> {
+  Timer? _timer;
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  String get countdown {
+    final end =
+        widget.transaction?.holdExpiresAt ??
+        DateTime.now().add(const Duration(hours: 24));
+    final left = end.difference(DateTime.now());
+    final seconds = left.isNegative ? 0 : left.inSeconds;
+    return '${(seconds ~/ 3600).toString().padLeft(2, '0')}:${((seconds % 3600) ~/ 60).toString().padLeft(2, '0')}:${(seconds % 60).toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tx = widget.transaction;
+    final memo = tx?.memo?.trim().isNotEmpty == true
+        ? tx!.memo!.trim()
+        : 'Bank transfer';
+    final isPrime = tx?.requiredTier?.toLowerCase() == 'prime';
+    final details =
+        'Amount: ${AppFormat.ngn(tx?.amount ?? 250000)}; Sender: ${tx?.counterpartyName ?? 'Janelle Hickinson'}; Reference: ${tx?.reference ?? tx?.id ?? 'pending'}; Message: $memo';
     return _ReceiptPage(
-      amount: '₦250,000',
+      amount: AppFormat.ngn(tx?.amount ?? 250000),
       amountColor: const Color(0xFFFF9F0A),
-      subtitle: '“April Salary” waiting for you',
-      recipient: const _ReceiptRecipient(
-        name: 'Janelle Hickinson',
-        assetImage: Assets.avatarJanelle,
+      subtitle: '“$memo” waiting for you',
+      recipient: _ReceiptRecipient(
+        name: tx?.counterpartyName ?? 'Janelle Hickinson',
+        assetImage: tx == null ? Assets.avatarJanelle : null,
+        networkImage: tx?.counterpartyProfileImageUrl,
       ),
-      memo: 'April Salary',
+      memo: memo,
       status: _ReceiptStatus.processing,
       transactionFee: '—',
       total: '—',
       supportStyle: _ReceiptSupportStyle.tile,
       showShare: true,
-      onShare: () => context.push(Routes.receiptUniversal),
+      onShare: tx == null
+          ? null
+          : () => context.push(
+              Routes.receiptUniversal,
+              extra: ReceiptUniversalArgs(
+                transaction: tx,
+                recipientName: tx.counterpartyName,
+              ),
+            ),
       showPaidWith: false,
       supportMemo: _SupportMemoData(
         title: 'Support Memo',
-        timer: '23:44:02',
-        body: 'Add your BVN and residential address to complete this transaction and raise your money limits to ₦5 Million Naira.',
+        timer: countdown,
+        body:
+            'This amount is beyond your money limits, add your NIN or use the get support button to complete this transaction and raise your money limits.',
         actions: [
           _ReceiptAction(
-            label: 'Add NIN',
-            onTap: () => context.push(Routes.addNin),
+            label: isPrime ? 'NIN verified' : 'Add NIN',
+            onTap: isPrime ? null : () => context.push(Routes.addNin),
           ),
-          _ReceiptAction(label: 'Add Address', onTap: () => {}),
+          _ReceiptAction(
+            label: 'Get support',
+            onTap: () => context.push(
+              Routes.supportChat,
+              extra:
+                  'I need help upgrading my money limits to receive this transaction detailed below : $details',
+            ),
+          ),
         ],
       ),
-      bankName: 'GTBank',
-      accountNumber: '0123456789',
+      bankName: tx?.bankName ?? 'GTBank',
+      accountNumber: tx?.counterpartyAccount ?? '—',
+      createdAt: tx?.createdAt,
+      transactionReference: tx?.reference ?? tx?.id,
     );
   }
 }
@@ -347,8 +461,7 @@ class ReceiptReceivedScreen extends ConsumerWidget {
       memo: 'April Salary',
       status: _ReceiptStatus.processing,
       transactionFee: '₦25 Fee',
-      stampDuty: r'$50 Fee',
-      total: '₦250,075',
+      total: '₦250,025',
       supportStyle: _ReceiptSupportStyle.tile,
       showShare: true,
       onShare: () => context.push(Routes.receiptUniversal),
@@ -436,6 +549,15 @@ class TransferReceiptScreen extends StatelessWidget {
       total: AppFormat.ngn(total),
       supportStyle: _ReceiptSupportStyle.row,
       showShare: transaction.status == TxStatus.success,
+      onShare: transaction.status == TxStatus.success
+          ? () => context.push(
+              Routes.receiptUniversal,
+              extra: ReceiptUniversalArgs(
+                transaction: transaction,
+                recipientName: recipientName,
+              ),
+            )
+          : null,
       bankName: bankName,
       accountNumber: accountNumber,
       createdAt: transaction.createdAt,
@@ -484,7 +606,6 @@ class _ReceiptPage extends StatelessWidget {
   final String memo;
   final _ReceiptStatus status;
   final String? transactionFee;
-  final String? stampDuty;
   final String total;
   final _ReceiptSupportStyle supportStyle;
   final bool showShare;
@@ -505,7 +626,6 @@ class _ReceiptPage extends StatelessWidget {
     required this.memo,
     required this.status,
     this.transactionFee,
-    this.stampDuty,
     required this.total,
     required this.supportStyle,
     required this.showShare,
@@ -530,7 +650,7 @@ class _ReceiptPage extends StatelessWidget {
         showDialog(
           context: context,
           barrierDismissible: true,
-          barrierColor: Colors.black.withOpacity(0.5),
+          barrierColor: Colors.black.withValues(alpha: 0.5),
           builder: (context) => TransfaStatusPopup(
             businessName: recipient.name,
             amount: amountValue,
@@ -545,7 +665,7 @@ class _ReceiptPage extends StatelessWidget {
         showDialog(
           context: context,
           barrierDismissible: true,
-          barrierColor: Colors.black.withOpacity(0.5),
+          barrierColor: Colors.black.withValues(alpha: 0.5),
           builder: (context) => TransfaStatusProgressPopup(
             accountName: recipient.name,
             amount: amountValue,
@@ -560,7 +680,7 @@ class _ReceiptPage extends StatelessWidget {
         showDialog(
           context: context,
           barrierDismissible: true,
-          barrierColor: Colors.black.withOpacity(0.5),
+          barrierColor: Colors.black.withValues(alpha: 0.5),
           builder: (context) => TransfaStatusUnavailablePopup(
             accountName: recipient.name,
             amount: amountValue,
@@ -610,19 +730,21 @@ class _ReceiptPage extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(height: 4),
-                _hPad(
-                  Center(
-                    child: Text(
-                      subtitle,
-                      style: AppTypography.body.copyWith(
-                        color: AppColors.textMuted,
-                        fontSize: 18,
+                if (subtitle.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  _hPad(
+                    Center(
+                      child: Text(
+                        subtitle,
+                        style: AppTypography.body.copyWith(
+                          color: AppColors.textMuted,
+                          fontSize: 18,
+                        ),
+                        textAlign: TextAlign.center,
                       ),
-                      textAlign: TextAlign.center,
                     ),
                   ),
-                ),
+                ],
                 const SizedBox(height: 28),
                 GestureDetector(
                   onTap: () => {
@@ -631,7 +753,7 @@ class _ReceiptPage extends StatelessWidget {
                         showDialog(
                           context: context,
                           barrierDismissible: true,
-                          barrierColor: Colors.black.withOpacity(0.5),
+                          barrierColor: Colors.black.withValues(alpha: 0.5),
                           builder: (context) => PersonalBankingPopup(
                             recipientName: recipient.name,
                             recipientImageUrl:
@@ -653,7 +775,7 @@ class _ReceiptPage extends StatelessWidget {
                         showDialog(
                           context: context,
                           barrierDismissible: true,
-                          barrierColor: Colors.black.withOpacity(0.5),
+                          barrierColor: Colors.black.withValues(alpha: 0.5),
                           builder: (context) => BusinessBankingPopup(
                             businessName: recipient.name,
                             // businessImageUrl: recipient.assetImage ?? Assets.magic,
@@ -671,7 +793,7 @@ class _ReceiptPage extends StatelessWidget {
                         showDialog(
                           context: context,
                           barrierDismissible: true,
-                          barrierColor: Colors.black.withOpacity(0.5),
+                          barrierColor: Colors.black.withValues(alpha: 0.5),
                           builder: (context) => TransfaAccountPreviewPopup(
                             userName: recipient.name,
                             userImageUrl: recipient.assetImage ?? '',
@@ -693,8 +815,6 @@ class _ReceiptPage extends StatelessWidget {
                   _hPad(_SupportMemoCard(data: supportMemo!)),
                   const SizedBox(height: 14),
                   _hPad(_ActionPillRow(actions: supportMemo!.actions)),
-                  const SizedBox(height: 14),
-                  _hPad(_MemoBubble(text: memo)),
                 ] else ...[
                   const SizedBox(height: 20),
                   _hPad(_MemoBubble(text: memo)),
@@ -705,7 +825,6 @@ class _ReceiptPage extends StatelessWidget {
                       _StatusSummaryCard(
                         status: status,
                         transactionFee: transactionFee,
-                        stampDuty: stampDuty,
                         total: total,
                       ),
                     ),
@@ -866,30 +985,19 @@ class _MemoBubble extends StatelessWidget {
   }
 }
 
-/// Status / Transaction / (Stamp Duty) / Total summary card. Status row
+/// Status / Transaction / Total summary card. Status row
 /// switches between Done (green check), Processing (orange clock), and
 /// Unable to Send (orange info-circle).
 class _StatusSummaryCard extends StatelessWidget {
   final _ReceiptStatus status;
   final String? transactionFee;
-  final String? stampDuty;
   final String total;
 
   const _StatusSummaryCard({
     required this.status,
     this.transactionFee,
-    this.stampDuty,
     required this.total,
   });
-
-  void _showStampDutyPopup(BuildContext context) {
-    showDialog(
-      context: context,
-      barrierDismissible: true,
-      barrierColor: Colors.black.withOpacity(0.5),
-      builder: (context) => StampDutyPopup(),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -913,20 +1021,6 @@ class _StatusSummaryCard extends StatelessWidget {
                 transactionFee!,
                 style: AppTypography.subheading.copyWith(fontSize: 17),
               ),
-            ),
-          ],
-          if (stampDuty != null) ...[
-            const Divider(color: Color(0xFFEEEEEE), height: 1),
-            GestureDetector(
-              onTap: () => {
-                showDialog(
-                  context: context,
-                  barrierDismissible: true,
-                  barrierColor: Colors.black.withOpacity(0.5),
-                  builder: (context) => StampDutyPopup(),
-                ),
-              },
-              child: _StampDutyRow(value: stampDuty!),
             ),
           ],
           const Divider(color: Color(0xFFEEEEEE), height: 1),
@@ -1031,63 +1125,6 @@ class _UnableBadge extends StatelessWidget {
   }
 }
 
-/// Stamp Duty row — small green stamp icon + label + value + info circle.
-class _StampDutyRow extends StatelessWidget {
-  final String value;
-  const _StampDutyRow({required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      child: Row(
-        children: [
-          Container(
-            width: 28,
-            height: 28,
-            alignment: Alignment.center,
-            child: Image.asset(
-              Assets.cbnLogo,
-              width: 18,
-              height: 18,
-              fit: BoxFit.contain,
-            ),
-          ),
-          const SizedBox(width: 5),
-          Text(
-            'Stamp Duty',
-            style: AppTypography.subheading.copyWith(
-              color: AppColors.textMuted,
-              fontSize: 17,
-            ),
-          ),
-          const Spacer(),
-          Container(
-            width: 22,
-            height: 22,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: AppColors.textMuted, width: 1.4),
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              'i',
-              style: AppTypography.caption.copyWith(
-                color: AppColors.textMuted,
-                fontWeight: FontWeight.w700,
-                fontSize: 12,
-                height: 1,
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Text(value, style: AppTypography.subheading.copyWith(fontSize: 17)),
-        ],
-      ),
-    );
-  }
-}
-
 /// Edge-to-edge white detail stripe with Time / Day / Transaction ID /
 /// Paid with rows. Shared by every receipt variant.
 class _DetailStripe extends StatelessWidget {
@@ -1148,7 +1185,7 @@ class _DetailStripe extends StatelessWidget {
 
 class _ReceiptAction {
   final String label;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   const _ReceiptAction({required this.label, required this.onTap});
 }
 
@@ -1261,7 +1298,7 @@ class _ActionPill extends StatelessWidget {
       child: Container(
         height: 56,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: action.onTap == null ? const Color(0xFFE9E9EA) : Colors.white,
           borderRadius: BorderRadius.circular(28),
           boxShadow: [
             BoxShadow(
@@ -1277,6 +1314,7 @@ class _ActionPill extends StatelessWidget {
           style: AppTypography.subheading.copyWith(
             fontSize: 18,
             fontWeight: FontWeight.w600,
+            color: action.onTap == null ? AppColors.textMuted : null,
           ),
         ),
       ),

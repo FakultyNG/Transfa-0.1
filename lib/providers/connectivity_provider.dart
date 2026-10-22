@@ -1,4 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+
 import 'dart:async';
 import 'dart:io';
 
@@ -8,46 +10,43 @@ final connectivityProvider =
       return ConnectivityNotifier();
     });
 
-// Provider to check if popup is showing
-final isNoInternetPopupShowingProvider = StateProvider<bool>((ref) => false);
-
 class ConnectivityState {
   final bool isConnected;
-  final bool hasShownPopup;
 
-  const ConnectivityState({
-    this.isConnected = true,
-    this.hasShownPopup = false,
-  });
+  const ConnectivityState({this.isConnected = true});
 
-  ConnectivityState copyWith({bool? isConnected, bool? hasShownPopup}) {
-    return ConnectivityState(
-      isConnected: isConnected ?? this.isConnected,
-      hasShownPopup: hasShownPopup ?? this.hasShownPopup,
-    );
+  ConnectivityState copyWith({bool? isConnected}) {
+    return ConnectivityState(isConnected: isConnected ?? this.isConnected);
   }
 }
 
 class ConnectivityNotifier extends StateNotifier<ConnectivityState> {
-  StreamSubscription? _subscription;
+  StreamSubscription<List<ConnectivityResult>>? _subscription;
   Timer? _recheckTimer;
   bool _isInitialized = false;
 
-  ConnectivityNotifier() : super(const ConnectivityState()) {
-    _initConnectivity();
+  ConnectivityNotifier({bool autoStart = true})
+    : super(const ConnectivityState()) {
+    if (autoStart) _initConnectivity();
   }
 
   void _initConnectivity() {
     if (_isInitialized) return;
     _isInitialized = true;
 
-    // Check connectivity every 5 seconds
-    _subscription = Stream.periodic(const Duration(seconds: 5)).listen((_) {
-      _checkConnectivity();
+    _subscription = Connectivity().onConnectivityChanged.listen((results) {
+      if (results.contains(ConnectivityResult.none)) {
+        _setConnected(false);
+      } else {
+        unawaited(_checkConnectivity());
+      }
     });
 
-    // Immediate check
-    _checkConnectivity();
+    unawaited(_checkConnectivity());
+    _recheckTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => unawaited(_checkConnectivity()),
+    );
   }
 
   Future<void> _checkConnectivity() async {
@@ -59,34 +58,16 @@ class ConnectivityNotifier extends StateNotifier<ConnectivityState> {
 
       final isConnected = result.isNotEmpty && result[0].rawAddress.isNotEmpty;
 
-      if (state.isConnected != isConnected) {
-        state = state.copyWith(isConnected: isConnected);
-
-        if (!isConnected) {
-          // Reset popup shown flag when connection is lost
-          state = state.copyWith(hasShownPopup: false);
-        } else {
-          // Recheck after connection is restored
-          _recheckTimer?.cancel();
-          _recheckTimer = Timer(const Duration(seconds: 2), () {
-            state = state.copyWith(hasShownPopup: false);
-          });
-        }
-      }
-    } catch (e) {
-      // Connection failed
-      if (state.isConnected) {
-        state = state.copyWith(isConnected: false, hasShownPopup: false);
-      }
+      _setConnected(isConnected);
+    } catch (_) {
+      _setConnected(false);
     }
   }
 
-  void popupShown() {
-    state = state.copyWith(hasShownPopup: true);
-  }
-
-  void resetPopupShown() {
-    state = state.copyWith(hasShownPopup: false);
+  void _setConnected(bool isConnected) {
+    if (state.isConnected != isConnected) {
+      state = state.copyWith(isConnected: isConnected);
+    }
   }
 
   @override

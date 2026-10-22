@@ -14,39 +14,24 @@ class ConnectivityObserver extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final connectivityState = ref.watch(connectivityProvider);
-    final hasShownPopup = ref.watch(isNoInternetPopupShowingProvider);
-
-    // Only show popup if not connected AND popup hasn't been shown yet
-    if (!connectivityState.isConnected && !hasShownPopup) {
-      // Schedule the state update after build is complete using microtask
-      Future.microtask(() {
-        ref.read(isNoInternetPopupShowingProvider.notifier).state = true;
-      });
-
-      return Stack(
-        children: [
-          child,
-          // Dark background overlay with gesture detector to prevent interaction
-          GestureDetector(
-            onTap: () {}, // Prevents taps from going through
-            behavior: HitTestBehavior.opaque,
-            child: Container(color: Colors.black.withOpacity(0.7)),
+    return Stack(
+      children: [
+        child,
+        Positioned.fill(
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 250),
+            child: connectivityState.isConnected
+                ? const SizedBox.shrink(key: ValueKey('online'))
+                : ColoredBox(
+                    key: const ValueKey('offline'),
+                    color: Colors.black.withValues(alpha: 0.7),
+                    child: const Center(
+                      child: NoInternetPopup(dismissible: false),
+                    ),
+                  ),
           ),
-          // Centered popup
-          Center(
-            child: NoInternetPopup(
-              onClose: () {
-                // When popup is closed, reset the popup shown state
-                ref.read(isNoInternetPopupShowingProvider.notifier).state =
-                    false;
-                debugPrint('Popup closed by user');
-              },
-            ),
-          ),
-        ],
-      );
-    }
-
-    return child;
+        ),
+      ],
+    );
   }
 }

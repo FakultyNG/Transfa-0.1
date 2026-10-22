@@ -1,7 +1,10 @@
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+
 import '../../../core/constants/assets.dart';
+import '../../../data/models/bank.dart';
 import '../../../shared/widgets/transfa_logo.dart';
 
 // ============================================================
@@ -9,7 +12,14 @@ import '../../../shared/widgets/transfa_logo.dart';
 // ============================================================
 
 class MultipleBanksPopup extends StatefulWidget {
-  const MultipleBanksPopup({super.key});
+  const MultipleBanksPopup({
+    super.key,
+    this.accountNumber,
+    this.suggestions = const [],
+  });
+
+  final String? accountNumber;
+  final List<BankSuggestion> suggestions;
 
   @override
   State<MultipleBanksPopup> createState() => _MultipleBanksPopupState();
@@ -20,8 +30,10 @@ class _MultipleBanksPopupState extends State<MultipleBanksPopup>
   late AnimationController _slideController;
   late Animation<Offset> _slideAnimation;
   late Animation<double> _fadeAnimation;
-  // final String? accountNumber = '207 922 3313';
-  final String? accountNumber = null;
+
+  String get _accountName => widget.suggestions.isEmpty
+      ? 'Choose a bank'
+      : widget.suggestions.first.accountName;
 
   @override
   void initState() {
@@ -62,7 +74,7 @@ class _MultipleBanksPopupState extends State<MultipleBanksPopup>
                 width: 378,
                 height: 560,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFCFCFB).withOpacity(0.5),
+                  color: const Color(0xFFFCFCFB).withValues(alpha: 0.5),
                   borderRadius: BorderRadius.circular(45),
                 ),
                 child: ClipRRect(
@@ -112,7 +124,7 @@ class _MultipleBanksPopupState extends State<MultipleBanksPopup>
                                     decoration: BoxDecoration(
                                       color: const Color(
                                         0xFFFCFCFB,
-                                      ).withOpacity(0.1),
+                                      ).withValues(alpha: 0.1),
                                       borderRadius: BorderRadius.circular(35),
                                     ),
                                     alignment: Alignment.center,
@@ -142,7 +154,7 @@ class _MultipleBanksPopupState extends State<MultipleBanksPopup>
                                     ),
                                     child: Column(
                                       children: [
-                                        Container(
+                                        SizedBox(
                                           width: 120,
                                           height: 120,
 
@@ -150,16 +162,22 @@ class _MultipleBanksPopupState extends State<MultipleBanksPopup>
                                             borderRadius: BorderRadius.circular(
                                               120,
                                             ),
-                                            child: Image.asset(
-                                              Assets.magic,
-                                              fit: BoxFit.cover,
+                                            child: Container(
+                                              color: const Color(0xFFF1F1F3),
+                                              alignment: Alignment.center,
+                                              child: SvgPicture.asset(
+                                                Assets.contacts,
+                                                width: 54,
+                                                height: 54,
+                                              ),
                                             ),
                                           ),
                                         ),
                                         const SizedBox(height: 20),
-                                        const Text(
-                                          'Magic Payma',
-                                          style: TextStyle(
+                                        Text(
+                                          _accountName,
+                                          textAlign: TextAlign.center,
+                                          style: const TextStyle(
                                             fontFamily: 'Arial Rounded MT Bold',
                                             fontSize: 30,
                                             letterSpacing: 0.02,
@@ -167,9 +185,9 @@ class _MultipleBanksPopupState extends State<MultipleBanksPopup>
                                           ),
                                         ),
                                         const SizedBox(height: 10),
-                                        accountNumber != null
+                                        widget.accountNumber != null
                                             ? Text(
-                                                accountNumber!,
+                                                widget.accountNumber!,
                                                 style: const TextStyle(
                                                   fontFamily: 'Roboto',
                                                   fontWeight: FontWeight.w400,
@@ -195,7 +213,7 @@ class _MultipleBanksPopupState extends State<MultipleBanksPopup>
                                     child: Column(
                                       children: [
                                         // Navigation Note
-                                        accountNumber != null
+                                        widget.accountNumber != null
                                             ? Container(
                                                 width: double.infinity,
                                                 padding: const EdgeInsets.all(
@@ -218,7 +236,7 @@ class _MultipleBanksPopupState extends State<MultipleBanksPopup>
                                                   16,
                                                 ),
                                                 child: const Text(
-                                                  'Magic has multiple bank accounts, choose a bank to pay.',
+                                                  'Enter an account number to find its most likely banks.',
                                                   style: TextStyle(
                                                     fontFamily: 'Roboto',
                                                     fontWeight: FontWeight.w400,
@@ -230,84 +248,32 @@ class _MultipleBanksPopupState extends State<MultipleBanksPopup>
                                               ),
                                         const SizedBox(height: 10),
 
-                                        // Bank 1 - Transfa
-                                        _BankOption(
-                                          logo: Container(
-                                            width: 50,
-                                            height: 50,
-                                            decoration: BoxDecoration(
-                                              color: Colors.black,
-                                              borderRadius:
-                                                  BorderRadius.circular(35),
+                                        if (widget.suggestions.isEmpty)
+                                          const Padding(
+                                            padding: EdgeInsets.all(16),
+                                            child: Text(
+                                              'No likely bank was found.',
+                                              textAlign: TextAlign.center,
                                             ),
-                                            alignment: Alignment.center,
-                                            child: const TransfaMark(
-                                              size: 24,
-                                              white: true,
-                                            ),
+                                          )
+                                        else
+                                          ...widget.suggestions.indexed.expand(
+                                            (entry) => [
+                                              _BankOption(
+                                                logo: _bankLogo(entry.$2),
+                                                name: entry.$2.bankName,
+                                                onTap: () => Navigator.of(
+                                                  context,
+                                                ).pop(entry.$2),
+                                              ),
+                                              if (entry.$1 <
+                                                  widget.suggestions.length - 1)
+                                                const Divider(
+                                                  height: 1,
+                                                  color: Color(0xFFF0F0F0),
+                                                ),
+                                            ],
                                           ),
-                                          name: 'Transfa',
-                                          onTap: () {
-                                            // Handle bank selection
-                                            Navigator.of(context).pop();
-                                          },
-                                        ),
-                                        const Divider(
-                                          height: 1,
-                                          color: Color(0xFFF0F0F0),
-                                        ),
-
-                                        // Bank 2 - FCMB
-                                        _BankOption(
-                                          logo: Container(
-                                            width: 50,
-                                            height: 50,
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFF5C2684),
-                                              borderRadius:
-                                                  BorderRadius.circular(35),
-                                            ),
-                                            alignment: Alignment.center,
-                                            child: Image.asset(
-                                              Assets.bankFcmb,
-                                              width: 30,
-                                              height: 30,
-                                            ),
-                                          ),
-                                          name: 'FCMB',
-                                          onTap: () {
-                                            // Handle bank selection
-                                            Navigator.of(context).pop();
-                                          },
-                                        ),
-                                        const Divider(
-                                          height: 1,
-                                          color: Color(0xFFF0F0F0),
-                                        ),
-
-                                        // Bank 3 - OPay
-                                        _BankOption(
-                                          logo: Container(
-                                            width: 50,
-                                            height: 50,
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFFFFFFFF),
-                                              borderRadius:
-                                                  BorderRadius.circular(35),
-                                            ),
-                                            alignment: Alignment.center,
-                                            child: Image.asset(
-                                              Assets.bankOpay,
-                                              width: 30,
-                                              height: 30,
-                                            ),
-                                          ),
-                                          name: 'OPay',
-                                          onTap: () {
-                                            // Handle bank selection
-                                            Navigator.of(context).pop();
-                                          },
-                                        ),
                                       ],
                                     ),
                                   ),
@@ -325,6 +291,31 @@ class _MultipleBanksPopupState extends State<MultipleBanksPopup>
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _bankLogo(BankSuggestion suggestion) {
+    final words = suggestion.bankName
+        .split(RegExp(r'\s+'))
+        .where((word) => word.isNotEmpty)
+        .toList();
+    final initials = words.take(2).map((word) => word[0]).join().toUpperCase();
+    return Container(
+      width: 50,
+      height: 50,
+      decoration: const BoxDecoration(
+        color: Color(0xFF18C83E),
+        shape: BoxShape.circle,
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        initials,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 16,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );

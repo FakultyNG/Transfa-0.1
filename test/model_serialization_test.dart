@@ -170,6 +170,32 @@ void main() {
       expect(transaction.reference, 'TF-20260525-001');
     });
 
+    test('parses a money-limit held inbound credit', () {
+      final transaction = AppTransaction.fromJson({
+        'id': 'hold_1',
+        'type': 'wallet_funding',
+        'status': 'pending',
+        'currency': 'NGN',
+        'amount': 600000,
+        'createdAt': '2026-10-22T10:00:00Z',
+        'metadata': {
+          'moneyLimitHold': true,
+          'requiredTier': 'prime',
+          'holdExpiresAt': '2026-10-23T10:00:00Z',
+          'accountName': 'Ada Customer',
+          'accountNumber': '0123456789',
+          'bankName': 'Access Bank',
+          'memo': 'October salary',
+        },
+      });
+
+      expect(transaction.moneyLimitHold, isTrue);
+      expect(transaction.requiredTier, 'prime');
+      expect(transaction.counterpartyName, 'Ada Customer');
+      expect(transaction.memo, 'October salary');
+      expect(transaction.holdExpiresAt, DateTime.utc(2026, 10, 23, 10));
+    });
+
     test('round-trips a transfer quote', () {
       final quote = TransferQuote.fromJson({
         'quote_id': 'qte_1',
