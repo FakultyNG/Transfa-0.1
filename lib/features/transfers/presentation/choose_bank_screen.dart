@@ -9,6 +9,7 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../../data/models/bank.dart';
 import '../../../data/repositories/repositories.dart';
+import '../../../shared/widgets/bank_logo.dart';
 
 class ChooseBankArgs {
   const ChooseBankArgs({this.suggestions = const []});
@@ -540,7 +541,11 @@ class _BankRow extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    _BankAvatar(bank: bank),
+                    BankLogo(
+                      bankName: bank.name,
+                      bankCode: bank.code,
+                      size: 40,
+                    ),
                     const SizedBox(width: 14),
                     Expanded(
                       child: Text(
@@ -748,20 +753,6 @@ _Logo _logoForName(String bankName) {
   return _Logo.generic;
 }
 
-String _bankInitials(String bankName) {
-  final words = bankName
-      .trim()
-      .split(RegExp(r'\s+'))
-      .where((word) => word.isNotEmpty)
-      .toList();
-  if (words.isEmpty) return 'B';
-  if (words.length == 1) {
-    final end = words.first.length >= 2 ? 2 : 1;
-    return words.first.substring(0, end).toUpperCase();
-  }
-  return '${words.first[0]}${words[1][0]}'.toUpperCase();
-}
-
 enum _Logo {
   chase,
   opay,
@@ -786,202 +777,4 @@ class _Bank {
   final _Logo logo;
   final String code;
   const _Bank(this.name, this.logo, {this.code = ''});
-}
-
-class _BankAvatar extends StatelessWidget {
-  final _Bank bank;
-  const _BankAvatar({required this.bank});
-
-  @override
-  Widget build(BuildContext context) {
-    final size = 40.0;
-    switch (bank.logo) {
-      case _Logo.opay:
-        return ClipOval(
-          child: Image.asset(
-            Assets.bankOpay,
-            width: size,
-            height: size,
-            fit: BoxFit.cover,
-          ),
-        );
-      case _Logo.fcmb:
-        return ClipOval(
-          child: Image.asset(
-            Assets.bankFcmb,
-            width: size,
-            height: size,
-            fit: BoxFit.cover,
-          ),
-        );
-      case _Logo.chase:
-        return Container(
-          width: size,
-          height: size,
-          decoration: const BoxDecoration(
-            color: Color(0xFFEAEAEE),
-            shape: BoxShape.circle,
-          ),
-          padding: const EdgeInsets.all(9),
-          child: const CustomPaint(painter: _ChaseLogoPainter()),
-        );
-      case _Logo.gtb:
-        return _InitialAvatar(
-          initials: 'GT',
-          bg: const Color(0xFFE85A1F),
-          fg: Colors.white,
-        );
-      case _Logo.access:
-        return _InitialAvatar(
-          initials: 'AB',
-          bg: const Color(0xFFEF3E33),
-          fg: Colors.white,
-        );
-      case _Logo.firstBank:
-        return _InitialAvatar(
-          initials: 'FB',
-          bg: const Color(0xFF003B71),
-          fg: Colors.white,
-        );
-      case _Logo.zenith:
-        return _InitialAvatar(
-          initials: 'ZB',
-          bg: const Color(0xFFE60012),
-          fg: Colors.white,
-        );
-      case _Logo.uba:
-        return _InitialAvatar(
-          initials: 'U',
-          bg: const Color(0xFFCC0000),
-          fg: Colors.white,
-        );
-      case _Logo.kuda:
-        return _InitialAvatar(
-          initials: 'K',
-          bg: const Color(0xFF40196D),
-          fg: Colors.white,
-        );
-      case _Logo.wema:
-        return _InitialAvatar(
-          initials: 'W',
-          bg: const Color(0xFF6F2C91),
-          fg: Colors.white,
-        );
-      case _Logo.sterling:
-        return _InitialAvatar(
-          initials: 'S',
-          bg: const Color(0xFFD8232A),
-          fg: Colors.white,
-        );
-      case _Logo.palmpay:
-        return _InitialAvatar(
-          initials: 'P',
-          bg: const Color(0xFF6238FB),
-          fg: Colors.white,
-        );
-      case _Logo.moneypoint:
-        return _InitialAvatar(
-          initials: 'M',
-          bg: const Color(0xFF0357EE),
-          fg: Colors.white,
-        );
-      case _Logo.stanbic:
-        return _InitialAvatar(
-          initials: 'SI',
-          bg: const Color(0xFF0033A0),
-          fg: Colors.white,
-        );
-      case _Logo.union:
-        return _InitialAvatar(
-          initials: 'UB',
-          bg: const Color(0xFF003E7E),
-          fg: Colors.white,
-        );
-      case _Logo.generic:
-        return _InitialAvatar(
-          initials: _bankInitials(bank.name),
-          bg: const Color(0xFF1976D2),
-          fg: Colors.white,
-        );
-    }
-  }
-}
-
-class _InitialAvatar extends StatelessWidget {
-  final String initials;
-  final Color bg;
-  final Color fg;
-  const _InitialAvatar({
-    required this.initials,
-    required this.bg,
-    required this.fg,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
-      alignment: Alignment.center,
-      child: Text(
-        initials,
-        style: AppTypography.caption.copyWith(
-          color: fg,
-          fontWeight: FontWeight.w800,
-          fontSize: 13,
-        ),
-      ),
-    );
-  }
-}
-
-class _ChaseLogoPainter extends CustomPainter {
-  const _ChaseLogoPainter();
-  @override
-  void paint(Canvas canvas, Size size) {
-    final blue = Paint()..color = const Color(0xFF1976D2);
-    final w = size.width, h = size.height;
-    final cx = w / 2, cy = h / 2;
-    final inset = w * 0.18;
-    canvas.drawPath(
-      Path()
-        ..moveTo(cx - inset, 0)
-        ..lineTo(cx + inset, 0)
-        ..lineTo(cx + inset, cy - inset)
-        ..lineTo(cx - inset, cy - inset)
-        ..close(),
-      blue,
-    );
-    canvas.drawPath(
-      Path()
-        ..moveTo(w, cy - inset)
-        ..lineTo(w, cy + inset)
-        ..lineTo(cx + inset, cy + inset)
-        ..lineTo(cx + inset, cy - inset)
-        ..close(),
-      blue,
-    );
-    canvas.drawPath(
-      Path()
-        ..moveTo(cx + inset, h)
-        ..lineTo(cx - inset, h)
-        ..lineTo(cx - inset, cy + inset)
-        ..lineTo(cx + inset, cy + inset)
-        ..close(),
-      blue,
-    );
-    canvas.drawPath(
-      Path()
-        ..moveTo(0, cy + inset)
-        ..lineTo(0, cy - inset)
-        ..lineTo(cx - inset, cy - inset)
-        ..lineTo(cx - inset, cy + inset)
-        ..close(),
-      blue,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

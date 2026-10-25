@@ -28,6 +28,12 @@ The UI talks to domain repositories, which depend on the `TransfaApi`
 interface. `MockApi` and `RestTransfaApi` implement the same contract, so the
 transport can change without changing feature code.
 
+For NGN name enquiry, `POST /api/v1/transfers/ngn/resolve-account` also returns
+`transfaUserMatched`, nullable `transfaUserId`, and nullable
+`profileImageUrl`. The image is trusted only when the backend reports an exact
+active Transfa DVA match and comes from the recipient's active CashDrop
+profile; otherwise the transfer UI displays name initials.
+
 ## Run
 
 The production API is enabled by default:

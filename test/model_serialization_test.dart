@@ -13,6 +13,22 @@ import 'package:transfa/data/models/wallet.dart';
 
 void main() {
   group('API model serialization', () {
+    test('parses resolved account CashDrop recipient metadata', () {
+      final account = ResolvedBankAccount.fromJson({
+        'accountName': 'ADA OKAFOR',
+        'accountNumber': '0123456789',
+        'bankCode': '044',
+        'bankName': 'Access Bank',
+        'transfaUserMatched': true,
+        'transfaUserId': 'user_1',
+        'profileImageUrl': 'https://cdn.example.com/cashdrop.jpg',
+      });
+
+      expect(account.transfaUserMatched, isTrue);
+      expect(account.transfaUserId, 'user_1');
+      expect(account.profileImageUrl, 'https://cdn.example.com/cashdrop.jpg');
+    });
+
     test('parses combined registration and OTP start response', () {
       final start = RegistrationStart.fromJson({
         'registrationToken': 'reg_123',

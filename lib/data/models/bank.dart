@@ -14,6 +14,9 @@ class ResolvedBankAccount {
     required this.accountNumber,
     required this.bankCode,
     required this.bankName,
+    this.transfaUserMatched = false,
+    this.transfaUserId,
+    this.profileImageUrl,
   });
 
   factory ResolvedBankAccount.fromJson(Map<String, dynamic> json) =>
@@ -22,12 +25,18 @@ class ResolvedBankAccount {
         accountNumber: json['accountNumber'].toString(),
         bankCode: json['bankCode'].toString(),
         bankName: json['bankName'].toString(),
+        transfaUserMatched: json['transfaUserMatched'] == true,
+        transfaUserId: json['transfaUserId']?.toString(),
+        profileImageUrl: json['profileImageUrl']?.toString(),
       );
 
   final String accountName;
   final String accountNumber;
   final String bankCode;
   final String bankName;
+  final bool transfaUserMatched;
+  final String? transfaUserId;
+  final String? profileImageUrl;
 }
 
 class BankSuggestion extends ResolvedBankAccount {

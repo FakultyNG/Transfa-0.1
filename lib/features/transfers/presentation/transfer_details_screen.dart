@@ -15,6 +15,7 @@ import '../../../data/models/transaction.dart';
 import '../../../data/repositories/repositories.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../../shared/widgets/transfa_modal_header.dart';
+import '../../../shared/widgets/bank_logo.dart';
 import 'transfer_state.dart';
 
 class TransferDetailsScreen extends ConsumerStatefulWidget {
@@ -155,6 +156,7 @@ class _TransferDetailsScreenState extends ConsumerState<TransferDetailsScreen> {
             itemBuilder: (context, index) {
               final bank = banks[index];
               return ListTile(
+                leading: BankLogo(bankName: bank.name, bankCode: bank.code),
                 title: Text(bank.name),
                 subtitle: Text(bank.code),
                 onTap: () => Navigator.pop(context, bank),
@@ -170,8 +172,9 @@ class _TransferDetailsScreenState extends ConsumerState<TransferDetailsScreen> {
       });
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(userFacingError(error))));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
     }
   }
 
@@ -245,8 +248,9 @@ class _TransferDetailsScreenState extends ConsumerState<TransferDetailsScreen> {
       if (mounted) context.push(Routes.transferConfirm);
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(userFacingError(error))));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -344,7 +348,10 @@ class _TransferDetailsScreenState extends ConsumerState<TransferDetailsScreen> {
               ..._bankSuggestions.map(
                 (suggestion) => ListTile(
                   dense: true,
-                  leading: const Icon(Icons.account_balance_rounded),
+                  leading: BankLogo(
+                    bankName: suggestion.bankName,
+                    bankCode: suggestion.bankCode,
+                  ),
                   title: Text(suggestion.accountName),
                   subtitle: Text(
                     '${suggestion.bankName} · ${suggestion.confidence.toStringAsFixed(0)}% match',
@@ -359,19 +366,25 @@ class _TransferDetailsScreenState extends ConsumerState<TransferDetailsScreen> {
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 child: Row(
                   children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: const BoxDecoration(
-                        color: AppColors.success,
-                        shape: BoxShape.circle,
+                    if (_selectedBank == null)
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: const BoxDecoration(
+                          color: AppColors.success,
+                          shape: BoxShape.circle,
+                        ),
+                        padding: const EdgeInsets.all(11),
+                        child: SvgPicture.asset(
+                          Assets.bankBlack,
+                          fit: BoxFit.contain,
+                        ),
+                      )
+                    else
+                      BankLogo(
+                        bankName: _selectedBank!.name,
+                        bankCode: _selectedBank!.code,
                       ),
-                      padding: const EdgeInsets.all(11),
-                      child: SvgPicture.asset(
-                        Assets.bankBlack,
-                        fit: BoxFit.contain,
-                      ),
-                    ),
                     const SizedBox(width: 14),
                     Expanded(
                       child: isForeign

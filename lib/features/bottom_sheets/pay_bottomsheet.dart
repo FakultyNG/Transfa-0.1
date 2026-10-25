@@ -18,6 +18,8 @@ import '../transfers/presentation/transfer_state.dart';
 import '../transfers/presentation/choose_bank_screen.dart';
 import '../transfers/presentation/recipient_picker_screen.dart';
 import '../pop-ups/multiple_banks_popup.dart';
+import '../../shared/widgets/bank_logo.dart';
+import 'singleAccountSheet.dart';
 
 // ============================================================
 // PAY SHEET BOTTOM SHEET
@@ -65,6 +67,7 @@ class _PaySheetState extends ConsumerState<PaySheet> {
   List<BankSuggestion> _suggestions = const [];
   TransferQuote? _quote;
   bool _loading = false;
+  bool _accountSheetOpen = false;
   String? _lastSuggestedAccount;
 
   double get _totalAmount {
@@ -196,7 +199,7 @@ class _PaySheetState extends ConsumerState<PaySheet> {
     await _loadQuote();
   }
 
-  Future<void> _loadQuote() async {
+  Future<void> _loadQuote({bool showResolvedSheet = true}) async {
     final bank = _selectedBankModel;
     final amount = double.tryParse(widget.amount.replaceAll(',', '')) ?? 0;
     if (bank == null || _selectedAccountNumber.length != 10 || amount <= 0) {
@@ -205,11 +208,11 @@ class _PaySheetState extends ConsumerState<PaySheet> {
     setState(() => _loading = true);
     try {
       final repository = ref.read(transferRepositoryProvider);
-      final resolved = await repository.resolveAccount(
+      final resolvedFuture = repository.resolveAccount(
         bankCode: bank.code,
         accountNumber: _selectedAccountNumber,
       );
-      final quote = await repository.quoteNgn(
+      final quoteFuture = repository.quoteNgn(
         amount: amount,
         bankCode: bank.code,
         accountNumber: _selectedAccountNumber,
@@ -217,11 +220,32 @@ class _PaySheetState extends ConsumerState<PaySheet> {
             ? 'TF Transfer'
             : _memoController.text.trim(),
       );
+      final walletFuture = ref
+          .read(walletProvider.future)
+          .then<double?>(
+            (wallet) => wallet.ngnBalance,
+            onError: (_, _) => null,
+          );
+      final resolved = await resolvedFuture;
+      final quote = await quoteFuture;
+      final walletBalance = await walletFuture;
       if (!mounted) return;
       setState(() {
         _selectedRecipientName = resolved.accountName;
+        _selectedRecipientImage = resolved.transfaUserMatched
+            ? resolved.profileImageUrl
+            : null;
+        _selectedAccountNumber = resolved.accountNumber;
+        _selectedBank = resolved.bankName;
+        _selectedBankModel = Bank(
+          code: resolved.bankCode,
+          name: resolved.bankName,
+        );
         _quote = quote;
       });
+      if (showResolvedSheet) {
+        await _showResolvedAccountSheet(resolved, quote, walletBalance);
+      }
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -234,8 +258,53 @@ class _PaySheetState extends ConsumerState<PaySheet> {
   }
 
   Future<void> _confirmTransfer() async {
-    if (_quote == null) await _loadQuote();
+    if (_quote == null) await _loadQuote(showResolvedSheet: false);
     if (!mounted || _quote == null || _selectedBankModel == null) return;
+    _continueToConfirmation();
+  }
+
+  Future<void> _showResolvedAccountSheet(
+    ResolvedBankAccount resolved,
+    TransferQuote quote,
+    double? walletBalance,
+  ) async {
+    if (_accountSheetOpen || !mounted) return;
+    _accountSheetOpen = true;
+    final confirm = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(45)),
+      ),
+      builder: (sheetContext) => SingleAccountSheet(
+        amount: widget.amount,
+        currencySymbol: widget.currency.symbol,
+        memo: _memoController.text,
+        recipientName: resolved.accountName,
+        recipientImageUrl: resolved.transfaUserMatched
+            ? resolved.profileImageUrl
+            : null,
+        accountNumber: resolved.accountNumber,
+        bankName: resolved.bankName,
+        bankCode: resolved.bankCode,
+        userBalance: walletBalance,
+        transactionFee: quote.fee,
+        totalAmount: quote.total,
+        allowBankChange: false,
+        onMemoChanged: (value) {
+          _memoController.text = value;
+          widget.onMemoChanged(value);
+        },
+        onConfirm: () => Navigator.pop(sheetContext, true),
+      ),
+    );
+    _accountSheetOpen = false;
+    if (confirm == true && mounted) _continueToConfirmation();
+  }
+
+  void _continueToConfirmation() {
+    if (_quote == null || _selectedBankModel == null) return;
     final amount = double.tryParse(widget.amount.replaceAll(',', '')) ?? 0;
     ref.read(transferDraftProvider.notifier).state = TransferDraft(
       currency: TxCurrency.ngn,
@@ -562,34 +631,41 @@ class _PaySheetState extends ConsumerState<PaySheet> {
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
-                                Container(
-                                  width: 30,
-                                  height: 30,
-                                  decoration: BoxDecoration(
-                                    gradient: _selectedBank.isNotEmpty
-                                        ? LinearGradient(
-                                            begin: Alignment.topCenter,
-                                            end: Alignment.bottomCenter,
-                                            colors: [
-                                              _selectedBankGradient1 ??
-                                                  const Color(0xFFFFFFFF),
-                                              _selectedBankGradient2 ??
-                                                  const Color(0xFFFFFFFF),
-                                            ],
-                                          )
-                                        : const LinearGradient(
-                                            begin: Alignment.topCenter,
-                                            end: Alignment.bottomCenter,
-                                            colors: [
-                                              Color(0xFF07B826),
-                                              Color(0xFF4EE659),
-                                            ],
-                                          ),
-                                    borderRadius: BorderRadius.circular(35),
+                                if (_selectedBank.isNotEmpty)
+                                  BankLogo(
+                                    bankName: _selectedBank,
+                                    bankCode: _selectedBankModel?.code,
+                                    size: 30,
+                                  )
+                                else
+                                  Container(
+                                    width: 30,
+                                    height: 30,
+                                    decoration: BoxDecoration(
+                                      gradient: _selectedBank.isNotEmpty
+                                          ? LinearGradient(
+                                              begin: Alignment.topCenter,
+                                              end: Alignment.bottomCenter,
+                                              colors: [
+                                                _selectedBankGradient1 ??
+                                                    const Color(0xFFFFFFFF),
+                                                _selectedBankGradient2 ??
+                                                    const Color(0xFFFFFFFF),
+                                              ],
+                                            )
+                                          : const LinearGradient(
+                                              begin: Alignment.topCenter,
+                                              end: Alignment.bottomCenter,
+                                              colors: [
+                                                Color(0xFF07B826),
+                                                Color(0xFF4EE659),
+                                              ],
+                                            ),
+                                      borderRadius: BorderRadius.circular(35),
+                                    ),
+                                    alignment: Alignment.center,
+                                    child: _getBankIcon(),
                                   ),
-                                  alignment: Alignment.center,
-                                  child: _getBankIcon(),
-                                ),
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: Text(

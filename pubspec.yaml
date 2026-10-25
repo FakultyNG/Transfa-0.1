@@ -54,6 +54,7 @@ flutter:
   assets:
     - assets/icons/
     - assets/images/
+    - assets/images/bank_logos/
 
 flutter_launcher_icons:
   android: true

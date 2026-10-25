@@ -6,6 +6,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../../core/constants/assets.dart';
 import '../../../data/models/bank.dart';
 import '../../../shared/widgets/transfa_logo.dart';
+import '../../../shared/widgets/bank_logo.dart';
 
 // ============================================================
 // MULTIPLE BANKS POPUP
@@ -260,7 +261,11 @@ class _MultipleBanksPopupState extends State<MultipleBanksPopup>
                                           ...widget.suggestions.indexed.expand(
                                             (entry) => [
                                               _BankOption(
-                                                logo: _bankLogo(entry.$2),
+                                                logo: BankLogo(
+                                                  bankName: entry.$2.bankName,
+                                                  bankCode: entry.$2.bankCode,
+                                                  size: 50,
+                                                ),
                                                 name: entry.$2.bankName,
                                                 onTap: () => Navigator.of(
                                                   context,
@@ -291,31 +296,6 @@ class _MultipleBanksPopupState extends State<MultipleBanksPopup>
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _bankLogo(BankSuggestion suggestion) {
-    final words = suggestion.bankName
-        .split(RegExp(r'\s+'))
-        .where((word) => word.isNotEmpty)
-        .toList();
-    final initials = words.take(2).map((word) => word[0]).join().toUpperCase();
-    return Container(
-      width: 50,
-      height: 50,
-      decoration: const BoxDecoration(
-        color: Color(0xFF18C83E),
-        shape: BoxShape.circle,
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        initials,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 16,
-          fontWeight: FontWeight.w700,
         ),
       ),
     );

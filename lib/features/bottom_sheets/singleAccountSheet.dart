@@ -1,14 +1,13 @@
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:intl/intl.dart';
-import 'package:go_router/go_router.dart';
+import 'package:transfa/core/constants/assets.dart';
 import 'package:transfa/features/pop-ups/chooseBank_popup.dart';
-import '../../../core/constants/assets.dart';
-import '../../../core/theme/app_typography.dart';
-import '../../../shared/widgets/transfa_logo.dart';
-import '../../../core/router/routes.dart';
-import '../../features/pop-ups/transfaDone_popup.dart';
+import 'package:transfa/features/pop-ups/transfaDone_popup.dart';
+import 'package:transfa/shared/widgets/bank_logo.dart';
+import 'package:transfa/shared/widgets/transfa_logo.dart';
 
 // ============================================================
 // SINGLE ACCOUNT BOTTOM SHEET
@@ -22,10 +21,17 @@ class SingleAccountSheet extends StatefulWidget {
   final String? recipientImageUrl;
   final String accountNumber;
   final String bankName;
+  final String? bankCode;
   final String? bankLogoAsset;
   final Color? bankGradientColor1;
   final Color? bankGradientColor2;
   final Function(String) onMemoChanged;
+  final double? userBalance;
+  final double transactionFee;
+  final double disputeProtection;
+  final double? totalAmount;
+  final VoidCallback? onConfirm;
+  final bool allowBankChange;
 
   const SingleAccountSheet({
     super.key,
@@ -36,10 +42,17 @@ class SingleAccountSheet extends StatefulWidget {
     this.recipientImageUrl,
     required this.accountNumber,
     required this.bankName,
+    this.bankCode,
     this.bankLogoAsset,
     this.bankGradientColor1,
     this.bankGradientColor2,
     required this.onMemoChanged,
+    this.userBalance,
+    this.transactionFee = 0,
+    this.disputeProtection = 0,
+    this.totalAmount,
+    this.onConfirm,
+    this.allowBankChange = true,
   });
 
   @override
@@ -49,10 +62,8 @@ class SingleAccountSheet extends StatefulWidget {
 class _SingleAccountSheetState extends State<SingleAccountSheet> {
   final TextEditingController _memoController = TextEditingController();
 
-  // Mock user balance
-  final double _userBalance = 25000000.00;
-  final double _transactionFee = 1000.00;
-  final double _disputeProtection = 25000.00;
+  double get _transactionFee => widget.transactionFee;
+  double get _disputeProtection => widget.disputeProtection;
 
   // Bank selection state
   String _selectedBankName = '';
@@ -62,7 +73,7 @@ class _SingleAccountSheetState extends State<SingleAccountSheet> {
 
   double get _totalAmount {
     final amount = double.tryParse(widget.amount.replaceAll(',', '')) ?? 0;
-    return amount + _transactionFee + _disputeProtection;
+    return widget.totalAmount ?? amount + _transactionFee + _disputeProtection;
   }
 
   String _formatWithCommas(double amount) {
@@ -76,14 +87,6 @@ class _SingleAccountSheetState extends State<SingleAccountSheet> {
       return formatted.split('.')[0];
     }
     return formatted;
-  }
-
-  String _getDecimalPart(double amount) {
-    final formatted = _formatWithCommas(amount);
-    if (formatted.contains('.')) {
-      return '.${formatted.split('.')[1]}';
-    }
-    return '.00';
   }
 
   @override
@@ -111,7 +114,7 @@ class _SingleAccountSheetState extends State<SingleAccountSheet> {
     showDialog(
       context: context,
       barrierDismissible: true,
-      barrierColor: Colors.black.withOpacity(0.6),
+      barrierColor: Colors.black.withValues(alpha: 0.6),
       builder: (context) => ChooseBankPopup(
         onTransfaSelected: () => _updateBankSelection(
           bankName: 'Transfa',
@@ -138,7 +141,8 @@ class _SingleAccountSheetState extends State<SingleAccountSheet> {
   void _showDonePopup() {
     // Get the recipient name from widget
     final String recipientName = widget.recipientName;
-    final String recipientImageUrl = widget.recipientImageUrl!;
+    final String recipientImageUrl =
+        widget.recipientImageUrl ?? Assets.contacts;
 
     // Close the current bottom sheet first
     Navigator.of(context).pop();
@@ -147,7 +151,7 @@ class _SingleAccountSheetState extends State<SingleAccountSheet> {
     showDialog(
       context: context,
       barrierDismissible: true,
-      barrierColor: Colors.black.withOpacity(0.6),
+      barrierColor: Colors.black.withValues(alpha: 0.6),
       builder: (context) => TransfaDonePopup(
         userName: recipientName,
         userImageUrl: recipientImageUrl,
@@ -190,7 +194,7 @@ class _SingleAccountSheetState extends State<SingleAccountSheet> {
       height: (MediaQuery.of(context).size.height * 0.7),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color(0xFFFCFCFB).withOpacity(0.5),
+        color: const Color(0xFFFCFCFB).withValues(alpha: 0.5),
         borderRadius: const BorderRadius.only(
           topLeft: Radius.circular(45),
           topRight: Radius.circular(45),
@@ -237,7 +241,8 @@ class _SingleAccountSheetState extends State<SingleAccountSheet> {
                           width: 40,
                           height: 40,
                           decoration: BoxDecoration(
-                            color: const Color(0xFFFCFCFB).withOpacity(0.1),
+                            color: const Color(0xFFFCFCFB)
+                                .withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(35),
                           ),
                           alignment: Alignment.center,
@@ -280,25 +285,10 @@ class _SingleAccountSheetState extends State<SingleAccountSheet> {
                                   ),
                                   borderRadius: BorderRadius.circular(120),
                                 ),
-                                child: widget.recipientImageUrl != null
-                                    ? ClipRRect(
-                                        borderRadius: BorderRadius.circular(
-                                          120,
-                                        ),
-                                        child: Image.asset(
-                                          widget.recipientImageUrl!,
-                                          width: 120,
-                                          height: 120,
-                                          fit: BoxFit.cover,
-                                        ),
-                                      )
-                                    : Center(
-                                        child: SvgPicture.asset(
-                                          Assets.contacts,
-                                          width: 110,
-                                          height: 110,
-                                        ),
-                                      ),
+                                child: _RecipientAvatar(
+                                  name: widget.recipientName,
+                                  imageUrl: widget.recipientImageUrl,
+                                ),
                               ),
                               const SizedBox(height: 10),
                               // Recipient Name
@@ -333,7 +323,9 @@ class _SingleAccountSheetState extends State<SingleAccountSheet> {
 
                         // Transfa Account Info - Updated with selected bank
                         GestureDetector(
-                          onTap: _showChooseBankPopup,
+                          onTap: widget.allowBankChange
+                              ? _showChooseBankPopup
+                              : null,
                           child: Container(
                             width: double.infinity,
                             padding: const EdgeInsets.all(16),
@@ -391,11 +383,11 @@ class _SingleAccountSheetState extends State<SingleAccountSheet> {
                                                   ),
                                           ),
                                         )
-                                      : const Center(
-                                          child: Icon(
-                                            Icons.account_balance,
-                                            color: Colors.white,
-                                            size: 24,
+                                      : Center(
+                                          child: BankLogo(
+                                            bankName: bankNameToShow,
+                                            bankCode: widget.bankCode,
+                                            size: 38,
                                           ),
                                         ),
                                 ),
@@ -570,8 +562,9 @@ class _SingleAccountSheetState extends State<SingleAccountSheet> {
                                   text: TextSpan(
                                     children: [
                                       TextSpan(
-                                        text:
-                                            'Balance: $symbol${_getMainAmount(_userBalance)}',
+                                        text: widget.userBalance == null
+                                            ? 'Balance unavailable'
+                                            : 'Balance: $symbol${_getMainAmount(widget.userBalance!)}',
                                         style: const TextStyle(
                                           fontFamily: 'Roboto',
                                           fontWeight: FontWeight.w400,
@@ -763,7 +756,7 @@ class _SingleAccountSheetState extends State<SingleAccountSheet> {
 
                         // Pay Bubble - Touch to Confirm
                         GestureDetector(
-                          onTap: _showDonePopup,
+                          onTap: widget.onConfirm ?? _showDonePopup,
                           child: Container(
                             width: double.infinity,
                             height: 150,
@@ -776,7 +769,9 @@ class _SingleAccountSheetState extends State<SingleAccountSheet> {
                                   height: 58,
                                   decoration: BoxDecoration(
                                     border: Border.all(
-                                      color: Colors.black.withOpacity(0.3),
+                                      color: Colors.black.withValues(
+                                        alpha: 0.3,
+                                      ),
                                       width: 3,
                                     ),
                                     borderRadius: BorderRadius.circular(58),
@@ -804,6 +799,70 @@ class _SingleAccountSheetState extends State<SingleAccountSheet> {
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RecipientAvatar extends StatelessWidget {
+  const _RecipientAvatar({required this.name, this.imageUrl});
+
+  final String name;
+  final String? imageUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final fallback = _RecipientInitials(name: name);
+    final source = imageUrl?.trim() ?? '';
+    if (source.isEmpty) return fallback;
+    return ClipOval(
+      child: source.startsWith('http://') || source.startsWith('https://')
+          ? Image.network(
+              source,
+              width: 120,
+              height: 120,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => fallback,
+            )
+          : Image.asset(
+              source,
+              width: 120,
+              height: 120,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => fallback,
+            ),
+    );
+  }
+}
+
+class _RecipientInitials extends StatelessWidget {
+  const _RecipientInitials({required this.name});
+
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    final words = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .toList();
+    final initials = words.isEmpty
+        ? 'TF'
+        : words.take(2).map((part) => part[0].toUpperCase()).join();
+    const colors = [Color(0xFF075E54), Color(0xFFAD1457), Color(0xFF29B6F6)];
+    final color = colors[name.toLowerCase().hashCode.abs() % colors.length];
+    return ColoredBox(
+      color: color,
+      child: Center(
+        child: Text(
+          initials,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 38,
+            fontWeight: FontWeight.w800,
           ),
         ),
       ),
