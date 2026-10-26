@@ -21,6 +21,8 @@ import '../../../shared/widgets/transfa_logo.dart';
 import '../../../features/pop-ups/transfaStatusProgress_popup.dart';
 import '../../../features/pop-ups/transfaStatusUnavailable_popup.dart';
 import '../../../features/pop-ups/transfaStatus_popup.dart';
+import '../../../features/pop-ups/transfaDone_popup.dart';
+import '../../../data/repositories/repositories.dart';
 
 /// Universal-Income style receipt — Magic sends ₦2,000,000.
 class ReceiptUniversalArgs {
@@ -420,8 +422,7 @@ class _ReceiptInReviewScreenState extends ConsumerState<ReceiptInReviewScreen> {
       supportMemo: _SupportMemoData(
         title: 'Support Memo',
         timer: countdown,
-        body:
-            'This amount is beyond your money limits, add your NIN or use the get support button to complete this transaction and raise your money limits.',
+        body: 'This amount is beyond your money limits, add your NIN or use the get support button to complete this transaction and raise your money limits.',
         actions: [
           _ReceiptAction(
             label: isPrime ? 'NIN verified' : 'Add NIN',
@@ -499,7 +500,7 @@ class ReceiptReceivedCompanyScreen extends ConsumerWidget {
 }
 
 /// Live transfer receipt using the values returned by the transfer API.
-class TransferReceiptScreen extends StatelessWidget {
+class TransferReceiptScreen extends ConsumerStatefulWidget {
   const TransferReceiptScreen({
     super.key,
     required this.transaction,
@@ -516,7 +517,74 @@ class TransferReceiptScreen extends StatelessWidget {
   final String memo;
 
   @override
+  ConsumerState<TransferReceiptScreen> createState() =>
+      _TransferReceiptScreenState();
+}
+
+class _TransferReceiptScreenState extends ConsumerState<TransferReceiptScreen> {
+  Timer? _statusTimer;
+  late AppTransaction _transaction;
+  bool _polling = false;
+  bool _shownCompletedPopup = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _transaction = widget.transaction;
+    if (_transaction.status == TxStatus.pending) {
+      _statusTimer = Timer.periodic(
+        const Duration(seconds: 3),
+        (_) => _refreshStatus(),
+      );
+      WidgetsBinding.instance.addPostFrameCallback((_) => _refreshStatus());
+    }
+  }
+
+  Future<void> _refreshStatus() async {
+    if (_polling || !mounted || _transaction.status != TxStatus.pending) return;
+    _polling = true;
+    try {
+      final latest = await ref
+          .read(transactionRepositoryProvider)
+          .get(_transaction.id);
+      if (!mounted || latest == null) return;
+      final completedNow =
+          _transaction.status == TxStatus.pending &&
+          latest.status == TxStatus.success;
+      setState(() => _transaction = latest);
+      if (latest.status != TxStatus.pending) {
+        _statusTimer?.cancel();
+        ref.invalidate(transactionsProvider);
+      }
+      if (completedNow && !_shownCompletedPopup) {
+        _shownCompletedPopup = true;
+        await showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          barrierColor: Colors.black.withValues(alpha: 0.6),
+          builder: (_) => TransfaDonePopup(
+            userName: widget.recipientName,
+            userImageUrl: latest.counterpartyProfileImageUrl,
+            navigateToReceipt: false,
+          ),
+        );
+      }
+    } catch (_) {
+      // Keep showing the last confirmed state and retry on the next interval.
+    } finally {
+      _polling = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _statusTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final transaction = _transaction;
     final received = transaction.type == TxType.credit;
     final status = switch (transaction.status) {
       TxStatus.success => _ReceiptStatus.done,
@@ -536,14 +604,14 @@ class TransferReceiptScreen extends StatelessWidget {
           : transaction.status == TxStatus.pending
           ? 'Transfer is processing'
           : received
-          ? 'Received from $recipientName'
-          : 'Sent to $recipientName',
+          ? 'Received from ${widget.recipientName}'
+          : 'Sent to ${widget.recipientName}',
       recipient: _ReceiptRecipient(
-        name: recipientName,
+        name: widget.recipientName,
         avatarColor: const Color(0xFF16A34A),
         networkImage: transaction.counterpartyProfileImageUrl,
       ),
-      memo: memo.isEmpty ? 'Naira transfer' : memo,
+      memo: widget.memo.isEmpty ? 'Naira transfer' : widget.memo,
       status: status,
       transactionFee: '${AppFormat.ngn(transaction.fee)} Fee',
       total: AppFormat.ngn(total),
@@ -554,17 +622,17 @@ class TransferReceiptScreen extends StatelessWidget {
               Routes.receiptUniversal,
               extra: ReceiptUniversalArgs(
                 transaction: transaction,
-                recipientName: recipientName,
+                recipientName: widget.recipientName,
               ),
             )
           : null,
-      bankName: bankName,
-      accountNumber: accountNumber,
+      bankName: widget.bankName,
+      accountNumber: widget.accountNumber,
       createdAt: transaction.createdAt,
       transactionReference: transaction.reference ?? transaction.id,
       supportMessage:
           'I need help with transaction ${transaction.reference ?? transaction.id}: '
-          '${received ? 'received from' : 'sent to'} $recipientName, '
+          '${received ? 'received from' : 'sent to'} ${widget.recipientName}, '
           '${AppFormat.ngn(transaction.amount)}, status ${transaction.status.name}.',
     );
   }
