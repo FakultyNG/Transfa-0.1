@@ -178,7 +178,7 @@ class _TransfaDonePopupState extends State<TransfaDonePopup>
                             ),
                             const SizedBox(height: 4),
                             // Transfa Status
-                            Container(
+                            SizedBox(
                               width: 80,
                               height: 16,
                               child: Row(
@@ -207,7 +207,7 @@ class _TransfaDonePopupState extends State<TransfaDonePopup>
                                         ),
                                         // CHECK
                                         Center(
-                                          child: Container(
+                                          child: SizedBox(
                                             width: 8,
                                             height: 8,
                                             child: SvgPicture.asset(

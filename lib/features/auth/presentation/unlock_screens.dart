@@ -269,9 +269,8 @@ class _UnlockPasscodeScreenState extends ConsumerState<UnlockPasscodeScreen> {
       } catch (error) {
         if (!mounted) return;
         setState(() => _code = '');
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(userFacingError(error))));
       } finally {
         if (mounted) setState(() => _loading = false);
       }
@@ -422,7 +421,7 @@ class _PayPasscodeScreenState extends State<PayPasscodeScreen> {
     });
     if (_code.length == 5 && mounted) {
       Future.delayed(const Duration(milliseconds: 250), () {
-        if (mounted) context.pushReplacement(Routes.receiptStatus);
+        if (mounted) Navigator.of(context).pop(_code);
       });
     }
   }
@@ -1313,9 +1312,8 @@ class _ForgotPasscodeScreenState extends ConsumerState<ForgotPasscodeScreen> {
       );
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(userFacingError(error))));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -1602,9 +1600,8 @@ class _RecoveryStartkeyScreenState
     } catch (error) {
       if (!mounted) return;
       _otp.clear();
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(userFacingError(error))));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -1627,9 +1624,8 @@ class _RecoveryStartkeyScreenState
       }
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(userFacingError(error))));
     } finally {
       if (mounted) setState(() => _loading = false);
     }

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:local_auth/local_auth.dart';
 
 import '../../../core/constants/assets.dart';
 import '../../../core/router/routes.dart';
@@ -12,13 +13,16 @@ import '../../../data/mock_api/currency.dart';
 import '../../../shared/widgets/transfa_logo.dart';
 import '../../../data/models/bank.dart';
 import '../../../data/models/transaction.dart';
+import '../../../data/api/device_identity.dart';
 import '../../../data/repositories/repositories.dart';
 import '../../../core/utils/error_messages.dart';
 import '../transfers/presentation/transfer_state.dart';
 import '../transfers/presentation/choose_bank_screen.dart';
 import '../transfers/presentation/recipient_picker_screen.dart';
 import '../pop-ups/multiple_banks_popup.dart';
+import '../pop-ups/transfaDone_popup.dart';
 import '../../shared/widgets/bank_logo.dart';
+import '../transfers/presentation/receipt_screens.dart';
 import 'singleAccountSheet.dart';
 
 // ============================================================
@@ -260,7 +264,7 @@ class _PaySheetState extends ConsumerState<PaySheet> {
   Future<void> _confirmTransfer() async {
     if (_quote == null) await _loadQuote(showResolvedSheet: false);
     if (!mounted || _quote == null || _selectedBankModel == null) return;
-    _continueToConfirmation();
+    await _authorizeAndConfirm();
   }
 
   Future<void> _showResolvedAccountSheet(
@@ -300,13 +304,13 @@ class _PaySheetState extends ConsumerState<PaySheet> {
       ),
     );
     _accountSheetOpen = false;
-    if (confirm == true && mounted) _continueToConfirmation();
+    if (confirm == true && mounted) await _authorizeAndConfirm();
   }
 
-  void _continueToConfirmation() {
-    if (_quote == null || _selectedBankModel == null) return;
+  TransferDraft? _prepareTransferDraft() {
+    if (_quote == null || _selectedBankModel == null) return null;
     final amount = double.tryParse(widget.amount.replaceAll(',', '')) ?? 0;
-    ref.read(transferDraftProvider.notifier).state = TransferDraft(
+    final draft = TransferDraft(
       currency: TxCurrency.ngn,
       amount: amount,
       recipientName: _selectedRecipientName,
@@ -316,9 +320,126 @@ class _PaySheetState extends ConsumerState<PaySheet> {
       memo: _memoController.text.trim(),
       quote: _quote,
     );
-    final router = GoRouter.of(context);
-    Navigator.pop(context);
-    router.push(Routes.transferConfirm);
+    ref.read(transferDraftProvider.notifier).state = draft;
+    return draft;
+  }
+
+  Future<void> _authorizeAndConfirm() async {
+    if (_loading) return;
+    final draft = _prepareTransferDraft();
+    if (draft == null) return;
+
+    setState(() => _loading = true);
+    String? biometricDeviceId;
+    try {
+      final deviceId = await DeviceIdentity().getOrCreate();
+      final serverStatus = await ref
+          .read(deviceFeaturesRepositoryProvider)
+          .biometricStatus();
+      final localAuth = LocalAuthentication();
+      final available = await localAuth.canCheckBiometrics;
+      if (serverStatus.enabled && available) {
+        final authenticated = await localAuth.authenticate(
+          localizedReason: 'Authorize this Transfa payment',
+          biometricOnly: true,
+        );
+        if (authenticated) biometricDeviceId = deviceId;
+      }
+    } catch (_) {
+      // Unavailable or cancelled device authentication uses passcode instead.
+    }
+
+    if (!mounted) return;
+    if (biometricDeviceId == null) {
+      setState(() => _loading = false);
+      final passcode = await context.push<String>(Routes.payPasscode);
+      if (!mounted || passcode == null) return;
+      setState(() => _loading = true);
+      await _submitTransfer(draft, passcode: passcode);
+    } else {
+      await _submitTransfer(draft, biometricDeviceId: biometricDeviceId);
+    }
+  }
+
+  Future<void> _submitTransfer(
+    TransferDraft draft, {
+    String? passcode,
+    String? biometricDeviceId,
+  }) async {
+    try {
+      final transaction = await ref
+          .read(transferRepositoryProvider)
+          .confirm(
+            quote: draft.quote!,
+            passcode: passcode,
+            biometricDeviceId: biometricDeviceId,
+            recipientName: draft.recipientName!,
+            recipientAccount: draft.recipientAccount,
+            bankName: draft.bankName,
+            memo: draft.memo,
+          );
+      ref.invalidate(walletProvider);
+      ref.invalidate(transactionsProvider);
+      if (mounted) await _openTransferReceipt(transaction, draft);
+    } catch (error) {
+      if (!mounted) return;
+      final quote = draft.quote!;
+      final failed = AppTransaction(
+        id: quote.quoteId,
+        type: TxType.debit,
+        status: TxStatus.failed,
+        currency: quote.currency,
+        amount: quote.amount,
+        fee: quote.fee,
+        totalDebit: quote.total,
+        counterpartyName: draft.recipientName ?? 'Recipient',
+        counterpartyAccount: draft.recipientAccount,
+        bankName: draft.bankName,
+        memo: draft.memo,
+        createdAt: DateTime.now(),
+      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(userFacingError(error))));
+      await _openTransferReceipt(failed, draft);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _openTransferReceipt(
+    AppTransaction transaction,
+    TransferDraft draft,
+  ) async {
+    final navigator = Navigator.of(context, rootNavigator: true);
+    if (transaction.status == TxStatus.success) {
+      await showDialog<void>(
+        context: context,
+        useRootNavigator: true,
+        barrierDismissible: false,
+        barrierColor: Colors.black.withValues(alpha: 0.6),
+        builder: (_) => TransfaDonePopup(
+          userName: draft.recipientName ?? transaction.counterpartyName,
+          userImageUrl: _selectedRecipientImage,
+          navigateToReceipt: false,
+        ),
+      );
+    }
+    if (!mounted) return;
+    Navigator.of(context).pop();
+    ref.read(transferDraftProvider.notifier).state = const TransferDraft();
+    await navigator.push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => TransferReceiptScreen(
+          transaction: transaction,
+          recipientName: draft.recipientName ?? transaction.counterpartyName,
+          accountNumber:
+              draft.recipientAccount ?? transaction.counterpartyAccount ?? '—',
+          bankName: draft.bankName ?? transaction.bankName ?? '—',
+          memo: draft.memo ?? transaction.memo ?? '',
+        ),
+      ),
+    );
   }
 
   // Get the appropriate icon for the account number field
