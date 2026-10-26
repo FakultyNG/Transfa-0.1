@@ -1,12 +1,15 @@
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../../core/constants/assets.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../data/models/user.dart';
 import '../../../data/repositories/repositories.dart';
 import '../../../shared/widgets/transfa_logo.dart';
 import '../../../shared/widgets/wallpaper_scaffold.dart';
@@ -29,6 +32,19 @@ class AddMoneyScreen extends ConsumerWidget {
       data: (d) => d.bankName,
       orElse: () => 'Bank',
     );
+    final sessionUser = ref.watch(currentUserProvider);
+    final profileUser = ref
+        .watch(profileProvider)
+        .maybeWhen(data: (user) => user, orElse: () => sessionUser);
+    final cashDropImage = ref
+        .watch(cashDropStatusProvider)
+        .maybeWhen(
+          data: (status) => status.profileImageUrl,
+          orElse: () => null,
+        );
+    final shareUser = profileUser?.copyWith(
+      avatarUrl: cashDropImage ?? profileUser.avatarUrl,
+    );
 
     return WallpaperScaffold(
       darken: 0.55,
@@ -50,6 +66,7 @@ class AddMoneyScreen extends ConsumerWidget {
                 const _IntroWidget(),
                 const SizedBox(height: 22),
                 _ShareWidget(
+                  user: shareUser,
                   account: account.replaceAllMapped(
                     RegExp(r'(\d{3})(\d{3})(\d{4})'),
                     (m) => '${m[1]} ${m[2]} ${m[3]}',
@@ -62,44 +79,6 @@ class AddMoneyScreen extends ConsumerWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-// ============================================================
-// WALLET PILL
-// ============================================================
-
-class _WalletPill extends StatelessWidget {
-  final VoidCallback onTap;
-  const _WalletPill({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 60,
-        height: 60,
-        decoration: BoxDecoration(
-          color: const Color.fromARGB(255, 31, 31, 31),
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.18),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        alignment: Alignment.center,
-        child: SvgPicture.asset(
-          Assets.transfaWallet,
-          width: 35,
-          height: 35,
-          fit: BoxFit.contain,
-        ),
       ),
     );
   }
@@ -122,9 +101,9 @@ class _IntroWidget extends StatelessWidget {
           width: double.infinity,
           padding: const EdgeInsets.fromLTRB(20, 22, 24, 26),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.18),
+            color: Colors.white.withValues(alpha: 0.18),
             borderRadius: BorderRadius.circular(32),
-            border: Border.all(color: Colors.white.withOpacity(0.35)),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -174,9 +153,14 @@ class _IntroWidget extends StatelessWidget {
 // ============================================================
 
 class _ShareWidget extends StatefulWidget {
+  final AppUser? user;
   final String account;
   final String bankName;
-  const _ShareWidget({required this.account, required this.bankName});
+  const _ShareWidget({
+    required this.user,
+    required this.account,
+    required this.bankName,
+  });
 
   @override
   State<_ShareWidget> createState() => _ShareWidgetState();
@@ -189,17 +173,28 @@ class _ShareWidgetState extends State<_ShareWidget> {
     showDialog(
       context: context,
       barrierDismissible: true,
-      barrierColor: Colors.black.withOpacity(0.7),
+      barrierColor: Colors.black.withValues(alpha: 0.7),
       builder: (context) => const CashDropScreen(),
     );
   }
 
   void _showTransfaAccountSharePopup() {
+    if (widget.account.replaceAll(' ', '').length != 10 ||
+        widget.bankName == 'Bank') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Account details are still loading.')),
+      );
+      return;
+    }
     showDialog(
       context: context,
       barrierDismissible: true,
-      barrierColor: Colors.black.withOpacity(0.6),
-      builder: (context) => const TransfaAccountSharePopup(),
+      barrierColor: Colors.black.withValues(alpha: 0.6),
+      builder: (context) => TransfaAccountSharePopup(
+        user: widget.user,
+        bankName: widget.bankName,
+        accountNumber: widget.account.replaceAll(' ', ''),
+      ),
     );
   }
 
@@ -227,9 +222,9 @@ class _ShareWidgetState extends State<_ShareWidget> {
         child: Container(
           padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.16),
+            color: Colors.white.withValues(alpha: 0.16),
             borderRadius: BorderRadius.circular(32),
-            border: Border.all(color: Colors.white.withOpacity(0.32)),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.32)),
           ),
           child: Column(
             children: [
@@ -262,7 +257,7 @@ class _ShareWidgetState extends State<_ShareWidget> {
             Text(
               widget.bankName,
               style: AppTypography.caption.copyWith(
-                color: Colors.white.withOpacity(0.55),
+                color: Colors.white.withValues(alpha: 0.55),
                 fontSize: 16,
               ),
             ),
@@ -368,57 +363,36 @@ class _CopyPill extends StatelessWidget {
 class _ActionPill extends StatelessWidget {
   final String label;
   final String svgAsset;
-  final Color? bg;
-  final VoidCallback? onTap;
 
-  const _ActionPill({
-    Key? key,
-    required this.label,
-    required this.svgAsset,
-    this.bg,
-    this.onTap,
-  }) : super(key: key);
+  const _ActionPill({required this.label, required this.svgAsset});
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: bg ?? Colors.white.withOpacity(0.18),
-              shape: BoxShape.circle,
-              // border: Border.all(color: Colors.white.withOpacity(0.35)),
-            ),
-            child: Center(
-              child: bg != null
-                  ? SizedBox(
-                      width: 28,
-                      height: 28,
-                      child: SvgPicture.asset(svgAsset, fit: BoxFit.contain),
-                    )
-                  : SvgPicture.asset(
-                      svgAsset,
-                      width: 56,
-                      height: 56,
-                      fit: BoxFit.contain,
-                    ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.18),
+            shape: BoxShape.circle,
+          ),
+          child: Center(
+            child: SvgPicture.asset(
+              svgAsset,
+              width: 56,
+              height: 56,
+              fit: BoxFit.contain,
             ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            label,
-            style: AppTypography.body.copyWith(
-              color: Colors.white,
-              fontSize: 14,
-            ),
-          ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          label,
+          style: AppTypography.body.copyWith(color: Colors.white, fontSize: 14),
+        ),
+      ],
     );
   }
 }

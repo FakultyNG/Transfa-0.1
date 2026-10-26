@@ -274,6 +274,7 @@ class _SingleAccountSheetState extends State<SingleAccountSheet> {
                               Container(
                                 width: 120,
                                 height: 120,
+                                padding: const EdgeInsets.all(4),
                                 decoration: BoxDecoration(
                                   gradient: const LinearGradient(
                                     begin: Alignment.topCenter,
@@ -283,7 +284,7 @@ class _SingleAccountSheetState extends State<SingleAccountSheet> {
                                       Color(0xFF006EFF),
                                     ],
                                   ),
-                                  borderRadius: BorderRadius.circular(120),
+                                  shape: BoxShape.circle,
                                 ),
                                 child: _RecipientAvatar(
                                   name: widget.recipientName,
@@ -816,23 +817,29 @@ class _RecipientAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final fallback = _RecipientInitials(name: name);
     final source = imageUrl?.trim() ?? '';
-    if (source.isEmpty) return fallback;
+    final Widget avatar;
+    if (source.isEmpty) {
+      avatar = fallback;
+    } else if (source.startsWith('http://') || source.startsWith('https://')) {
+      avatar = Image.network(
+        source,
+        width: double.infinity,
+        height: double.infinity,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => fallback,
+      );
+    } else {
+      avatar = Image.asset(
+        source,
+        width: double.infinity,
+        height: double.infinity,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => fallback,
+      );
+    }
     return ClipOval(
-      child: source.startsWith('http://') || source.startsWith('https://')
-          ? Image.network(
-              source,
-              width: 120,
-              height: 120,
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => fallback,
-            )
-          : Image.asset(
-              source,
-              width: 120,
-              height: 120,
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => fallback,
-            ),
+      clipBehavior: Clip.antiAlias,
+      child: SizedBox.expand(child: avatar),
     );
   }
 }

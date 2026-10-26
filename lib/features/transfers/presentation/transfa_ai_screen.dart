@@ -47,10 +47,11 @@ class _TransfaAiScreenState extends ConsumerState<TransfaAiScreen> {
   void _tap(String d) => setState(() {
     if (d == '.') {
       if (!_digits.contains('.')) _digits += '.';
-    } else if (_digits == '0')
+    } else if (_digits == '0') {
       _digits = d;
-    else
+    } else {
       _digits += d;
+    }
   });
   void _back() => setState(() {
     if (_digits.isNotEmpty) {
@@ -124,6 +125,9 @@ class _TransfaAiScreenState extends ConsumerState<TransfaAiScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
+    // The pay sheet owns its keyboard/scroll response. Keeping the amount
+    // screen fixed prevents focused sheet fields from moving the UI beneath it.
+    resizeToAvoidBottomInset: false,
     backgroundColor: AppColors.backgroundAlt,
     body: Stack(
       children: [
@@ -525,7 +529,7 @@ class _SubLine extends StatelessWidget {
   const _SubLine({required this.tx});
   @override
   Widget build(BuildContext context) {
-    if (tx.status == _Status.unableToSend)
+    if (tx.status == _Status.unableToSend) {
       return Row(
         children: [
           const Icon(
@@ -544,7 +548,8 @@ class _SubLine extends StatelessWidget {
           ),
         ],
       );
-    if (tx.status == _Status.processing)
+    }
+    if (tx.status == _Status.processing) {
       return Row(
         children: [
           const Icon(
@@ -563,6 +568,7 @@ class _SubLine extends StatelessWidget {
           ),
         ],
       );
+    }
     return Row(
       children: [
         SvgPicture.asset(
