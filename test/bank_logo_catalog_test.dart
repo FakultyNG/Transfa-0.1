@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transfa/data/services/bank_logo_catalog.dart';
 import 'package:transfa/shared/widgets/bank_logo.dart';
@@ -69,4 +70,20 @@ void main() {
       isNot(stableBankColor('Another Bank')),
     );
   });
+
+  testWidgets(
+    'renders bundled logos immediately without waiting on a network future',
+    (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: BankLogo(bankName: 'Access Bank', bankCode: '000005'),
+          ),
+        ),
+      );
+
+      expect(find.byType(FutureBuilder<BankLogoRecord?>), findsNothing);
+      expect(find.byType(Image), findsOneWidget);
+    },
+  );
 }

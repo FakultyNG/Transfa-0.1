@@ -17,38 +17,23 @@ class BankLogo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fallback = BankInitialsLogo(bankName: bankName, size: size);
-    return FutureBuilder<BankLogoRecord?>(
-      future: BankLogoCatalog.instance.resolve(
-        bankName: bankName,
-        bankCode: bankCode,
+    final record = BankLogoCatalog.find(
+      bundledBankLogoRecords,
+      bankName: bankName,
+      bankCode: bankCode,
+    );
+    final assetPath = record?.assetPath;
+    if (assetPath == null || assetPath.isEmpty) return fallback;
+    return _LogoFrame(
+      size: size,
+      child: Image.asset(
+        assetPath,
+        fit: BoxFit.contain,
+        gaplessPlayback: true,
+        cacheWidth: (size * MediaQuery.devicePixelRatioOf(context)).ceil(),
+        cacheHeight: (size * MediaQuery.devicePixelRatioOf(context)).ceil(),
+        errorBuilder: (_, _, _) => fallback,
       ),
-      builder: (context, snapshot) {
-        final record = snapshot.data;
-        final assetPath = record?.assetPath;
-        if (assetPath != null && assetPath.isNotEmpty) {
-          return _LogoFrame(
-            size: size,
-            child: Image.asset(
-              assetPath,
-              fit: BoxFit.contain,
-              gaplessPlayback: true,
-              errorBuilder: (_, _, _) => fallback,
-            ),
-          );
-        }
-
-        final url = record?.pngUrl;
-        if (url == null || url.isEmpty) return fallback;
-        return _LogoFrame(
-          size: size,
-          child: Image.network(
-            url,
-            fit: BoxFit.contain,
-            gaplessPlayback: true,
-            errorBuilder: (_, _, _) => fallback,
-          ),
-        );
-      },
     );
   }
 }
