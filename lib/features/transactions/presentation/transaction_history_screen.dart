@@ -13,10 +13,12 @@ class TransactionHistoryScreen extends ConsumerStatefulWidget {
   const TransactionHistoryScreen({super.key});
 
   @override
-  ConsumerState<TransactionHistoryScreen> createState() => _TransactionHistoryScreenState();
+  ConsumerState<TransactionHistoryScreen> createState() =>
+      _TransactionHistoryScreenState();
 }
 
-class _TransactionHistoryScreenState extends ConsumerState<TransactionHistoryScreen> {
+class _TransactionHistoryScreenState
+    extends ConsumerState<TransactionHistoryScreen> {
   String _filter = 'All';
   final _filters = const ['All', 'Sent', 'Received', 'Pending'];
 
@@ -53,18 +55,24 @@ class _TransactionHistoryScreenState extends ConsumerState<TransactionHistoryScr
                   borderRadius: BorderRadius.circular(35),
                   onTap: () => setState(() => _filter = f),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: selected ? AppColors.primary : AppColors.surface,
                       borderRadius: BorderRadius.circular(35),
                       border: Border.all(
-                          color: selected ? AppColors.primary : AppColors.divider),
+                        color: selected ? AppColors.primary : AppColors.divider,
+                      ),
                     ),
-                    child: Text(f,
-                        style: AppTypography.body.copyWith(
-                          color: selected ? Colors.white : AppColors.textPrimary,
-                          fontSize: 14,
-                        )),
+                    child: Text(
+                      f,
+                      style: AppTypography.body.copyWith(
+                        color: selected ? Colors.white : AppColors.textPrimary,
+                        fontSize: 14,
+                      ),
+                    ),
                   ),
                 );
               },
@@ -74,12 +82,21 @@ class _TransactionHistoryScreenState extends ConsumerState<TransactionHistoryScr
           Expanded(
             child: txAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Text('$e'),
+              error: (_, _) => Center(
+                child: Text(
+                  'Unable to load transaction history. Please try again.',
+                  style: AppTypography.bodyMuted,
+                  textAlign: TextAlign.center,
+                ),
+              ),
               data: (txs) {
                 final filtered = txs.where(_matches).toList();
                 if (filtered.isEmpty) {
                   return Center(
-                    child: Text('No transactions yet', style: AppTypography.bodyMuted),
+                    child: Text(
+                      'No transactions yet',
+                      style: AppTypography.bodyMuted,
+                    ),
                   );
                 }
                 return ListView.builder(
@@ -87,7 +104,8 @@ class _TransactionHistoryScreenState extends ConsumerState<TransactionHistoryScr
                   itemCount: filtered.length,
                   itemBuilder: (_, i) => TransactionTile(
                     tx: filtered[i],
-                    onTap: () => context.push('/transactions/${filtered[i].id}'),
+                    onTap: () =>
+                        context.push('/transactions/${filtered[i].id}'),
                   ),
                 );
               },

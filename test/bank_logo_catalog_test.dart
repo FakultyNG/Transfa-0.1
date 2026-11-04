@@ -60,6 +60,14 @@ void main() {
       )?.assetPath,
       'assets/images/bank_logos/uba.png',
     );
+    expect(
+      BankLogoCatalog.find(
+        bundledBankLogoRecords,
+        bankName: '000005',
+        bankCode: '000005',
+      )?.assetPath,
+      'assets/images/bank_logos/access-bank.png',
+    );
   });
 
   test('fallback initials and color are stable', () {

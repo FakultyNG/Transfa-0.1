@@ -79,10 +79,13 @@ class AppTransaction {
     final metadata = json['metadata'] is Map
         ? Map<String, dynamic>.from(json['metadata'] as Map)
         : const <String, dynamic>{};
+    final type = _txType(json['type']);
+    final status = _txStatus(json['status']);
+    final rawType = json['type']?.toString().toLowerCase() ?? '';
     return AppTransaction(
       id: json['id'].toString(),
-      type: _txType(json['type']),
-      status: _txStatus(json['status']),
+      type: type,
+      status: status,
       currency: _txCurrency(json['currency']),
       amount: _asDouble(json['amount']),
       fee: _optionalDouble(json['fee']),
@@ -93,14 +96,12 @@ class AppTransaction {
       ngnAmount: json['ngn_amount'] == null && json['ngnAmount'] == null
           ? null
           : _asDouble(json['ngn_amount'] ?? json['ngnAmount']),
-      counterpartyName:
-          (json['counterparty_name'] ??
-                  json['counterpartyName'] ??
-                  json['recipientName'] ??
-                  metadata['accountName'] ??
-                  json['description'] ??
-                  'Transaction')
-              .toString(),
+      counterpartyName: _publicTransactionLabel(
+        json,
+        metadata,
+        rawType: rawType,
+        status: status,
+      ),
       counterpartyAccount:
           (json['counterparty_account'] ??
                   json['counterpartyAccount'] ??
@@ -108,7 +109,9 @@ class AppTransaction {
               ?.toString(),
       bankName: (json['bank_name'] ?? json['bankName'] ?? metadata['bankName'])
           ?.toString(),
-      memo: (json['memo'] ?? json['narration'] ?? metadata['memo'])?.toString(),
+      memo: rawType == 'reversal'
+          ? null
+          : (json['memo'] ?? json['narration'] ?? metadata['memo'])?.toString(),
       counterpartyProfileImageUrl:
           (json['counterpartyProfileImageUrl'] ??
                   metadata['counterpartyProfileImageUrl'])
@@ -151,6 +154,39 @@ class AppTransaction {
       'holdExpiresAt': holdExpiresAt!.toUtc().toIso8601String(),
     'created_at': createdAt.toUtc().toIso8601String(),
   };
+}
+
+String _publicTransactionLabel(
+  Map<String, dynamic> json,
+  Map<String, dynamic> metadata, {
+  required String rawType,
+  required TxStatus status,
+}) {
+  final recipient =
+      json['counterparty_name'] ??
+      json['counterpartyName'] ??
+      json['recipientName'] ??
+      metadata['accountName'];
+  if (recipient != null && recipient.toString().trim().isNotEmpty) {
+    return recipient.toString();
+  }
+  if (rawType == 'reversal') return 'Transaction reversal';
+  if (status == TxStatus.failed) {
+    return switch (rawType) {
+      'ngn_transfer' => 'Bank transfer',
+      'usd_transfer' || 'cny_transfer' => 'International transfer',
+      'gift_card' => 'Gift card purchase',
+      'bill_payment' => 'Bill payment',
+      'wallet_funding' => 'Wallet funding',
+      'wallet_adjustment' => 'Wallet adjustment',
+      'fee' => 'Transaction fee',
+      _ => 'Transaction',
+    };
+  }
+  final description = json['description']?.toString().trim();
+  return description == null || description.isEmpty
+      ? 'Transaction'
+      : description;
 }
 
 class TransferQuote {

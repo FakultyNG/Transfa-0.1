@@ -12,9 +12,10 @@ import '../../../data/repositories/repositories.dart';
 import '../../../shared/widgets/bank_logo.dart';
 
 class ChooseBankArgs {
-  const ChooseBankArgs({this.suggestions = const []});
+  const ChooseBankArgs({this.suggestions = const [], this.accountNumber});
 
   final List<BankSuggestion> suggestions;
+  final String? accountNumber;
 }
 
 class ChooseBankScreen extends ConsumerStatefulWidget {
@@ -32,11 +33,14 @@ class _ChooseBankScreenState extends ConsumerState<ChooseBankScreen> {
   String _query = '';
 
   List<_Bank> _all = const [];
+  List<BankSuggestion> _rankedSuggestions = const [];
   bool _loading = true;
+  bool _suggestionsLoading = false;
+  bool _logosPrecached = false;
   String? _error;
 
   List<_Bank> get _suggestions {
-    final recognized = widget.args.suggestions
+    return _rankedSuggestions
         .map(
           (suggestion) => _Bank(
             suggestion.bankName,
@@ -45,7 +49,6 @@ class _ChooseBankScreenState extends ConsumerState<ChooseBankScreen> {
           ),
         )
         .toList();
-    return recognized.isNotEmpty ? recognized : _all.take(3).toList();
   }
 
   // Helper method to get bank logo asset
@@ -133,11 +136,22 @@ class _ChooseBankScreenState extends ConsumerState<ChooseBankScreen> {
   @override
   void initState() {
     super.initState();
+    _rankedSuggestions = rankBankSuggestions(widget.args.suggestions);
     _search.addListener(() {
       final q = _search.text.trim();
       if (q != _query) setState(() => _query = q);
     });
-    Future.microtask(_loadBanks);
+    Future.microtask(() async {
+      await Future.wait([_loadBanks(), _loadSuggestions()]);
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_logosPrecached) return;
+    _logosPrecached = true;
+    precacheBundledBankLogos(context);
   }
 
   Future<void> _loadBanks() async {
@@ -162,7 +176,10 @@ class _ChooseBankScreenState extends ConsumerState<ChooseBankScreen> {
                   ),
                 )
                 .toList()
-              ..sort((left, right) => left.name.compareTo(right.name));
+              ..sort(
+                (left, right) =>
+                    compareBankNamesByPopularity(left.name, right.name),
+              );
         _loading = false;
         _error = _all.isEmpty ? 'No banks are currently available.' : null;
       });
@@ -172,6 +189,28 @@ class _ChooseBankScreenState extends ConsumerState<ChooseBankScreen> {
         _loading = false;
         _error = userFacingError(error);
       });
+    }
+  }
+
+  Future<void> _loadSuggestions() async {
+    final accountNumber = widget.args.accountNumber?.replaceAll(
+      RegExp(r'\D'),
+      '',
+    );
+    if (accountNumber == null || accountNumber.length != 10) return;
+    if (mounted) setState(() => _suggestionsLoading = true);
+    try {
+      final suggestions = await ref
+          .read(transferRepositoryProvider)
+          .suggestBanks(accountNumber);
+      if (!mounted) return;
+      setState(() {
+        _rankedSuggestions = rankBankSuggestions(suggestions);
+        _suggestionsLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _suggestionsLoading = false);
     }
   }
 
@@ -204,7 +243,22 @@ class _ChooseBankScreenState extends ConsumerState<ChooseBankScreen> {
                 const _HeroCard(),
                 const SizedBox(height: 28),
 
-                if (!searching && !_loading && _suggestions.isNotEmpty) ...[
+                if (!searching && _suggestionsLoading) ...[
+                  const _SectionHeader(
+                    label: 'Suggestions',
+                    glyph: _SectionGlyph.suggestions,
+                  ),
+                  const SizedBox(height: 14),
+                  const _GroupedCard(
+                    children: [
+                      Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24),
+                        child: Center(child: CircularProgressIndicator()),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 28),
+                ] else if (!searching && _suggestions.isNotEmpty) ...[
                   const _SectionHeader(
                     label: 'Suggestions',
                     glyph: _SectionGlyph.suggestions,
@@ -726,6 +780,70 @@ class _GlassShell extends StatelessWidget {
 // ============================================================
 //  Bank model + avatar rendering
 // ============================================================
+
+List<BankSuggestion> rankBankSuggestions(Iterable<BankSuggestion> suggestions) {
+  final ranked = suggestions.toList()
+    ..sort((left, right) {
+      final confidence = right.confidence.compareTo(left.confidence);
+      if (confidence != 0) return confidence;
+      return compareBankNamesByPopularity(left.bankName, right.bankName);
+    });
+  final seen = <String>{};
+  return ranked
+      .where((suggestion) => seen.add(suggestion.bankCode.trim()))
+      .take(5)
+      .toList(growable: false);
+}
+
+int compareBankNamesByPopularity(String left, String right) {
+  final leftRank = bankPopularityRank(left);
+  final rightRank = bankPopularityRank(right);
+  final rank = leftRank.compareTo(rightRank);
+  if (rank != 0) return rank;
+  return left.toLowerCase().compareTo(right.toLowerCase());
+}
+
+int bankPopularityRank(String bankName) {
+  const popularBanks = [
+    'access',
+    'gtbank',
+    'zenith',
+    'uba',
+    'firstbank',
+    'opay',
+    'moniepoint',
+    'kuda',
+    'palmpay',
+    'fidelity',
+    'stanbicibtc',
+    'fcmb',
+    'sterling',
+    'wema',
+    'union',
+    'ecobank',
+    'polaris',
+    'providus',
+  ];
+  final normalized = _canonicalBankName(bankName);
+  final index = popularBanks.indexOf(normalized);
+  return index < 0 ? popularBanks.length : index;
+}
+
+String _canonicalBankName(String bankName) {
+  final compact = bankName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+  if (compact.contains('guarantytrust') || compact.contains('gtbank')) {
+    return 'gtbank';
+  }
+  if (compact.contains('firstbank')) return 'firstbank';
+  if (compact.contains('unitedbankforafrica') || compact == 'uba') return 'uba';
+  if (compact.contains('firstcitymonument') || compact == 'fcmb') return 'fcmb';
+  if (compact.contains('stanbicibtc')) return 'stanbicibtc';
+  if (compact.contains('moniepoint')) return 'moniepoint';
+  return compact.replaceAll(
+    RegExp(r'(nigeria|plc|limited|ltd|microfinance|mfb|bank|digitalservices)'),
+    '',
+  );
+}
 
 _Logo _logoForName(String bankName) {
   final name = bankName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');

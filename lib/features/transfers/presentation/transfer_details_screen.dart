@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
@@ -16,6 +17,7 @@ import '../../../data/repositories/repositories.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../../shared/widgets/transfa_modal_header.dart';
 import '../../../shared/widgets/bank_logo.dart';
+import 'choose_bank_screen.dart';
 import 'transfer_state.dart';
 
 class TransferDetailsScreen extends ConsumerStatefulWidget {
@@ -36,9 +38,9 @@ class _TransferDetailsScreenState extends ConsumerState<TransferDetailsScreen> {
   final _country = TextEditingController(text: 'US');
   Bank? _selectedBank;
   List<Beneficiary> _beneficiaries = const [];
-  List<BankSuggestion> _bankSuggestions = const [];
   Timer? _searchDebounce;
   bool _loading = false;
+  String? _lastAutoOpenedAccount;
 
   TxCurrency get _currency => ref.read(transferDraftProvider).currency;
   bool get _isForeign => _currency != TxCurrency.ngn;
@@ -80,11 +82,16 @@ class _TransferDetailsScreenState extends ConsumerState<TransferDetailsScreen> {
     setState(() {});
     _searchDebounce?.cancel();
     final query = value.trim();
+    if (_currency == TxCurrency.ngn) {
+      if (query.length != 10) {
+        _lastAutoOpenedAccount = null;
+      } else if (_lastAutoOpenedAccount != query) {
+        _lastAutoOpenedAccount = query;
+        Future.microtask(() => _chooseBank(accountNumber: query));
+      }
+    }
     if (query.length < 3) {
-      setState(() {
-        _beneficiaries = const [];
-        _bankSuggestions = const [];
-      });
+      setState(() => _beneficiaries = const []);
       return;
     }
     _searchDebounce = Timer(const Duration(milliseconds: 350), () async {
@@ -94,21 +101,11 @@ class _TransferDetailsScreenState extends ConsumerState<TransferDetailsScreen> {
           query: query,
           type: _beneficiaryType,
         );
-        final bankSuggestions =
-            _currency == TxCurrency.ngn && query.length == 10
-            ? await repository.suggestBanks(query)
-            : <BankSuggestion>[];
         if (!mounted || _account.text.trim() != query) return;
-        setState(() {
-          _beneficiaries = beneficiaries;
-          _bankSuggestions = bankSuggestions;
-        });
+        setState(() => _beneficiaries = beneficiaries);
       } catch (_) {
         if (!mounted || _account.text.trim() != query) return;
-        setState(() {
-          _beneficiaries = const [];
-          _bankSuggestions = const [];
-        });
+        setState(() => _beneficiaries = const []);
       }
     });
   }
@@ -125,50 +122,24 @@ class _TransferDetailsScreenState extends ConsumerState<TransferDetailsScreen> {
         );
       }
       _beneficiaries = const [];
-      _bankSuggestions = const [];
     });
   }
 
-  void _selectSuggestion(BankSuggestion suggestion) {
-    setState(() {
-      _account.text = suggestion.accountNumber;
-      _name.text = suggestion.accountName;
-      _bank.text = suggestion.bankName;
-      _selectedBank = Bank(
-        code: suggestion.bankCode,
-        name: suggestion.bankName,
-      );
-      _beneficiaries = const [];
-      _bankSuggestions = const [];
-    });
-  }
-
-  Future<void> _chooseBank() async {
+  Future<void> _chooseBank({String? accountNumber}) async {
     try {
-      final banks = await ref.read(ngnBanksProvider.future);
-      if (!mounted) return;
-      final selected = await showModalBottomSheet<Bank>(
-        context: context,
-        showDragHandle: true,
-        builder: (context) => SafeArea(
-          child: ListView.builder(
-            itemCount: banks.length,
-            itemBuilder: (context, index) {
-              final bank = banks[index];
-              return ListTile(
-                leading: BankLogo(bankName: bank.name, bankCode: bank.code),
-                title: Text(bank.name),
-                subtitle: Text(bank.code),
-                onTap: () => Navigator.pop(context, bank),
-              );
-            },
-          ),
+      final result = await context.push<Map<String, dynamic>>(
+        Routes.chooseBank,
+        extra: ChooseBankArgs(
+          accountNumber: accountNumber ?? _account.text.trim(),
         ),
       );
-      if (selected == null || !mounted) return;
+      if (result == null || !mounted) return;
+      final code = result['code']?.toString() ?? '';
+      final name = result['name']?.toString() ?? '';
+      if (code.isEmpty || name.isEmpty) return;
       setState(() {
-        _selectedBank = selected;
-        _bank.text = selected.name;
+        _selectedBank = Bank(code: code, name: name);
+        _bank.text = name;
       });
     } catch (error) {
       if (!mounted) return;
@@ -292,6 +263,9 @@ class _TransferDetailsScreenState extends ConsumerState<TransferDetailsScreen> {
                     controller: _account,
                     keyboardType: TextInputType.number,
                     maxLength: isForeign ? null : 10,
+                    inputFormatters: isForeign
+                        ? null
+                        : [FilteringTextInputFormatter.digitsOnly],
                     onChanged: _onAccountChanged,
                     style: AppTypography.subheading.copyWith(fontSize: 22),
                     decoration: InputDecoration(
@@ -332,7 +306,7 @@ class _TransferDetailsScreenState extends ConsumerState<TransferDetailsScreen> {
                 ),
               ),
             const Divider(color: Color(0xFFE0E0E0)),
-            if (_beneficiaries.isNotEmpty || _bankSuggestions.isNotEmpty) ...[
+            if (_beneficiaries.isNotEmpty) ...[
               const SizedBox(height: 8),
               ..._beneficiaries.map(
                 (beneficiary) => ListTile(
@@ -345,23 +319,11 @@ class _TransferDetailsScreenState extends ConsumerState<TransferDetailsScreen> {
                   onTap: () => _selectBeneficiary(beneficiary),
                 ),
               ),
-              ..._bankSuggestions.map(
-                (suggestion) => ListTile(
-                  dense: true,
-                  leading: BankLogo(
-                    bankName: suggestion.bankName,
-                    bankCode: suggestion.bankCode,
-                  ),
-                  title: Text(suggestion.accountName),
-                  subtitle: Text(
-                    '${suggestion.bankName} · ${suggestion.confidence.toStringAsFixed(0)}% match',
-                  ),
-                  onTap: () => _selectSuggestion(suggestion),
-                ),
-              ),
             ],
             InkWell(
-              onTap: isForeign ? null : _chooseBank,
+              onTap: isForeign
+                  ? null
+                  : () => _chooseBank(accountNumber: _account.text.trim()),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 child: Row(

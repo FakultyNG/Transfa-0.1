@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -19,7 +20,6 @@ import '../../../core/utils/error_messages.dart';
 import '../transfers/presentation/transfer_state.dart';
 import '../transfers/presentation/choose_bank_screen.dart';
 import '../transfers/presentation/recipient_picker_screen.dart';
-import '../pop-ups/multiple_banks_popup.dart';
 import '../pop-ups/transfaDone_popup.dart';
 import '../../shared/widgets/bank_logo.dart';
 import '../transfers/presentation/receipt_screens.dart';
@@ -112,52 +112,19 @@ class _PaySheetState extends ConsumerState<PaySheet> {
       if (_suggestions.isNotEmpty) setState(() => _suggestions = const []);
       return;
     }
-    try {
-      final suggestions = await ref
-          .read(transferRepositoryProvider)
-          .suggestBanks(account);
-      if (mounted && _selectedAccountNumber == account) {
-        setState(() => _suggestions = suggestions);
-        if (suggestions.isNotEmpty && _lastSuggestedAccount != account) {
-          _lastSuggestedAccount = account;
-          await _showSuggestedBanks(account, suggestions);
-        }
-      }
-    } catch (_) {
-      // The full bank list remains available if provider suggestions fail.
-    }
+    if (_lastSuggestedAccount == account) return;
+    _lastSuggestedAccount = account;
+    await _chooseLiveBank(accountNumber: account);
   }
 
-  Future<void> _showSuggestedBanks(
-    String account,
-    List<BankSuggestion> suggestions,
-  ) async {
-    final selected = await showDialog<BankSuggestion>(
-      context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.55),
-      builder: (_) =>
-          MultipleBanksPopup(accountNumber: account, suggestions: suggestions),
-    );
-    if (selected == null || !mounted || _selectedAccountNumber != account) {
-      return;
-    }
-    setState(() {
-      _selectedBankModel = Bank(
-        code: selected.bankCode,
-        name: selected.bankName,
-      );
-      _selectedBank = selected.bankName;
-      _selectedRecipientName = selected.accountName;
-      _quote = null;
-    });
-    await _loadQuote();
-  }
-
-  Future<void> _chooseLiveBank() async {
+  Future<void> _chooseLiveBank({String? accountNumber}) async {
     try {
       final result = await context.push<Map<String, dynamic>>(
         Routes.chooseBank,
-        extra: ChooseBankArgs(suggestions: _suggestions),
+        extra: ChooseBankArgs(
+          suggestions: _suggestions,
+          accountNumber: accountNumber ?? _selectedAccountNumber,
+        ),
       );
       if (result == null || !mounted) return;
       final code = result['code']?.toString() ?? '';
@@ -248,6 +215,10 @@ class _PaySheetState extends ConsumerState<PaySheet> {
         _quote = quote;
       });
       if (showResolvedSheet) {
+        // Account lookup is complete. Clear the lookup loading state before
+        // opening the confirmation sheet so its confirm action can proceed
+        // directly into biometric/passcode authorization.
+        setState(() => _loading = false);
         await _showResolvedAccountSheet(resolved, quote, walletBalance);
       }
     } catch (error) {
@@ -691,6 +662,9 @@ class _PaySheetState extends ConsumerState<PaySheet> {
                                   controller: _accountController,
                                   keyboardType: TextInputType.number,
                                   maxLength: 10,
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.digitsOnly,
+                                  ],
                                   onChanged: _accountChanged,
                                   style: const TextStyle(
                                     fontFamily: 'Roboto',
@@ -702,9 +676,6 @@ class _PaySheetState extends ConsumerState<PaySheet> {
                                   decoration: InputDecoration(
                                     counterText: '',
                                     hintText: 'Account number...',
-                                    helperText: _selectedRecipientName.isEmpty
-                                        ? null
-                                        : _selectedRecipientName,
                                     border: InputBorder.none,
                                     isDense: true,
                                   ),

@@ -104,6 +104,16 @@ class BankLogoCatalog {
   }) {
     final code = bankCode?.replaceAll(RegExp(r'\s+'), '') ?? '';
     if (code.isNotEmpty) {
+      const providerCodeAliases = {
+        // Strowallet currently identifies Access Bank with this provider code.
+        '000005': 'access',
+      };
+      final alias = providerCodeAliases[code];
+      if (alias != null) {
+        for (final record in records) {
+          if (_canonical(record.name) == alias) return record;
+        }
+      }
       for (final record in records) {
         if (record.bankCode == code || record.scCode == code) return record;
       }

@@ -30,12 +30,24 @@ class BankLogo extends StatelessWidget {
         assetPath,
         fit: BoxFit.contain,
         gaplessPlayback: true,
-        cacheWidth: (size * MediaQuery.devicePixelRatioOf(context)).ceil(),
-        cacheHeight: (size * MediaQuery.devicePixelRatioOf(context)).ceil(),
         errorBuilder: (_, _, _) => fallback,
       ),
     );
   }
+}
+
+Future<void> precacheBundledBankLogos(BuildContext context) async {
+  await Future.wait(
+    bundledBankLogoRecords.map((record) async {
+      final assetPath = record.assetPath;
+      if (assetPath == null || assetPath.isEmpty) return;
+      try {
+        await precacheImage(AssetImage(assetPath), context);
+      } catch (_) {
+        // A missing optional logo must not block the bank picker.
+      }
+    }),
+  );
 }
 
 class _LogoFrame extends StatelessWidget {

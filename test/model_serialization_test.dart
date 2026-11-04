@@ -186,6 +186,33 @@ void main() {
       expect(transaction.reference, 'TF-20260525-001');
     });
 
+    test('does not expose backend failure reasons in transaction history', () {
+      final failed = AppTransaction.fromJson({
+        'id': 'txn_failed',
+        'type': 'ngn_transfer',
+        'amount': 5000,
+        'currency': 'NGN',
+        'status': 'failed',
+        'description': 'Strowallet request failed with status code 403',
+        'createdAt': '2026-11-04T10:30:00Z',
+      });
+      final reversal = AppTransaction.fromJson({
+        'id': 'txn_reversal',
+        'type': 'reversal',
+        'amount': 5000,
+        'currency': 'NGN',
+        'status': 'successful',
+        'description': 'Provider failed before NGN transfer submission',
+        'narration': 'Reversal of txn_ngn_private_reference',
+        'createdAt': '2026-11-04T10:31:00Z',
+      });
+
+      expect(failed.counterpartyName, 'Bank transfer');
+      expect(failed.counterpartyName, isNot(contains('Strowallet')));
+      expect(reversal.counterpartyName, 'Transaction reversal');
+      expect(reversal.memo, isNull);
+    });
+
     test('parses a money-limit held inbound credit', () {
       final transaction = AppTransaction.fromJson({
         'id': 'hold_1',
