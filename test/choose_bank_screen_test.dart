@@ -77,4 +77,15 @@ void main() {
       orderedEquals(['Access Bank', 'Zenith Bank', 'Abbey MFB', 'Unity Bank']),
     );
   });
+
+  test('banks with bundled logos sort before banks without logos', () {
+    expect(
+      compareBanksForDisplay('Abbey Mortgage Bank', '404', 'Unity Bank', '215'),
+      greaterThan(0),
+    );
+    expect(
+      compareBanksForDisplay('Access Bank', '044', 'Unity Bank', '215'),
+      lessThan(0),
+    );
+  });
 }

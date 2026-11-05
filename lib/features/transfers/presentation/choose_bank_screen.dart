@@ -9,6 +9,7 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../../data/models/bank.dart';
 import '../../../data/repositories/repositories.dart';
+import '../../../data/services/bank_logo_catalog.dart';
 import '../../../shared/widgets/bank_logo.dart';
 
 class ChooseBankArgs {
@@ -177,8 +178,12 @@ class _ChooseBankScreenState extends ConsumerState<ChooseBankScreen> {
                 )
                 .toList()
               ..sort(
-                (left, right) =>
-                    compareBankNamesByPopularity(left.name, right.name),
+                (left, right) => compareBanksForDisplay(
+                  left.name,
+                  left.code,
+                  right.name,
+                  right.code,
+                ),
               );
         _loading = false;
         _error = _all.isEmpty ? 'No banks are currently available.' : null;
@@ -801,6 +806,30 @@ int compareBankNamesByPopularity(String left, String right) {
   final rank = leftRank.compareTo(rightRank);
   if (rank != 0) return rank;
   return left.toLowerCase().compareTo(right.toLowerCase());
+}
+
+int compareBanksForDisplay(
+  String leftName,
+  String leftCode,
+  String rightName,
+  String rightCode,
+) {
+  final leftHasLogo =
+      BankLogoCatalog.find(
+        bundledBankLogoRecords,
+        bankName: leftName,
+        bankCode: leftCode,
+      )?.assetPath !=
+      null;
+  final rightHasLogo =
+      BankLogoCatalog.find(
+        bundledBankLogoRecords,
+        bankName: rightName,
+        bankCode: rightCode,
+      )?.assetPath !=
+      null;
+  if (leftHasLogo != rightHasLogo) return leftHasLogo ? -1 : 1;
+  return compareBankNamesByPopularity(leftName, rightName);
 }
 
 int bankPopularityRank(String bankName) {

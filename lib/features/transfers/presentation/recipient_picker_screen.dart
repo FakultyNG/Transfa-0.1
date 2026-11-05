@@ -75,6 +75,13 @@ class _RecipientPickerScreenState extends ConsumerState<RecipientPickerScreen> {
   bool _loadingContacts = false;
   String? _error;
 
+  List<_Contact> get _contactRecipients {
+    final seen = <String>{};
+    return <_Contact>[..._contacts, ..._recents]
+        .where((item) => seen.add('${item.accountNumber}:${item.bankCode}'))
+        .toList(growable: false);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -219,9 +226,9 @@ class _RecipientPickerScreenState extends ConsumerState<RecipientPickerScreen> {
                   ..._sectionView(
                     icon: const _ContactsCircle(),
                     label: 'Contacts',
-                    items: _contacts.take(5).toList(),
-                    extraItems: _contacts.length > 5
-                        ? _contacts.skip(5).toList()
+                    items: _contactRecipients.take(5).toList(),
+                    extraItems: _contactRecipients.length > 5
+                        ? _contactRecipients.skip(5).toList()
                         : null,
                     loading: _loadingContacts,
                   ),
