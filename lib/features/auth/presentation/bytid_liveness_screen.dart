@@ -23,12 +23,14 @@ class BytidLivenessScreen extends StatefulWidget {
     String expectedSessionId,
   ) {
     final uri = Uri.tryParse(value);
-    if (uri == null ||
-        uri.scheme != 'transfa' ||
-        uri.host != 'kyc' ||
-        uri.path != '/liveness-complete') {
-      return null;
-    }
+    if (uri == null) return null;
+    final isAppReturn =
+        uri.scheme == 'transfa' &&
+        uri.host == 'kyc' &&
+        uri.path == '/liveness-complete';
+    final isBackendReturn =
+        uri.scheme == 'https' && uri.path.endsWith('/kyc/bvn/liveness/return');
+    if (!isAppReturn && !isBackendReturn) return null;
     final returnedId = uri.queryParameters['liveness_session_id'];
     if (returnedId == null || returnedId != expectedSessionId) return null;
     return LivenessWebResult(
@@ -70,17 +72,17 @@ class _BytidLivenessScreenState extends State<BytidLivenessScreen> {
                 if (mounted) setState(() => _progress = progress);
               },
               onPageStarted: (value) {
+                if (_handleCompletionUrl(value)) return;
                 final uri = Uri.tryParse(value);
                 if (uri != null) _currentUri = uri;
                 if (mounted) setState(() => _pageError = null);
               },
+              onUrlChange: (change) {
+                final url = change.url;
+                if (url != null) _handleCompletionUrl(url);
+              },
               onNavigationRequest: (request) {
-                final result = BytidLivenessScreen.completionFromUrl(
-                  request.url,
-                  widget.sessionId,
-                );
-                if (result != null) {
-                  _returnToVerification(result);
+                if (_handleCompletionUrl(request.url)) {
                   return NavigationDecision.prevent;
                 }
                 final uri = Uri.tryParse(request.url);
@@ -91,6 +93,11 @@ class _BytidLivenessScreenState extends State<BytidLivenessScreen> {
                 return NavigationDecision.navigate;
               },
               onWebResourceError: (error) {
+                if (_hasReturned) return;
+                final failedUrl = error.url;
+                if (failedUrl != null && _handleCompletionUrl(failedUrl)) {
+                  return;
+                }
                 if (error.isForMainFrame == true && mounted) {
                   setState(() {
                     _pageError =
@@ -101,6 +108,16 @@ class _BytidLivenessScreenState extends State<BytidLivenessScreen> {
             ),
           )
           ..loadRequest(_currentUri);
+  }
+
+  bool _handleCompletionUrl(String value) {
+    final result = BytidLivenessScreen.completionFromUrl(
+      value,
+      widget.sessionId,
+    );
+    if (result == null) return false;
+    _returnToVerification(result);
+    return true;
   }
 
   bool _isTrustedCameraOrigin(Uri uri) {
